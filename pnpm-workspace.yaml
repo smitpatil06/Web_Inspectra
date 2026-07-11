@@ -2,5 +2,3 @@ packages:
   - "frontend"
   - "shared-types"
   - "backend"
-allowBuilds:
-  esbuild: set this to true or false

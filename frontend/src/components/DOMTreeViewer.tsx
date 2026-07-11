@@ -1,104 +1,91 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import type { DOMNode } from "@web-inspectra/shared-types";
-import { ChevronRight, ChevronDown, Hash, FileCode } from "lucide-react";
+import { ChevronRight, ChevronDown } from "lucide-react";
 
-interface DOMTreeViewerProps {
-  node: DOMNode;
-  depth?: number;
-}
+interface Props { node: DOMNode; depth?: number; defaultExpanded?: boolean; }
 
-export default function DOMTreeViewer({ node, depth = 0 }: DOMTreeViewerProps) {
-  const [isExpanded, setIsExpanded] = useState(depth < 2);
+export default function DOMTreeViewer({ node, depth = 0, defaultExpanded = false }: Props) {
+  const [open, setOpen] = useState(depth < 2 || defaultExpanded);
   const hasChildren = node.children && node.children.length > 0;
 
-  const toggleExpand = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsExpanded(!isExpanded);
-  };
-
-  const classString = node.classes && node.classes.length > 0
-    ? `.${node.classes.join(".")}`
-    : "";
-
-  const renderAttributes = () => {
-    if (!node.attributes || Object.keys(node.attributes).length === 0) return null;
-    return (
-      <span className="text-zinc-500 text-xs ml-2 select-none">
-        {Object.entries(node.attributes).map(([key, val]) => (
-          <span key={key} className="mr-1.5">
-            <span className="text-zinc-400 font-mono">{key}</span>=
-            <span className="text-emerald-400 font-mono">"{val.length > 25 ? val.substring(0, 25) + "..." : val}"</span>
-          </span>
-        ))}
-      </span>
-    );
-  };
+  const tagColor =
+    ["html", "head", "body"].includes(node.tag) ? "text-violet-400" :
+    ["div", "section", "article", "main", "header", "footer", "nav", "aside"].includes(node.tag) ? "text-cyan-400" :
+    ["h1", "h2", "h3", "h4", "h5", "h6"].includes(node.tag) ? "text-amber-400" :
+    ["a", "button", "input", "select", "textarea", "form", "label"].includes(node.tag) ? "text-emerald-400" :
+    ["img", "video", "audio", "svg", "canvas", "picture"].includes(node.tag) ? "text-rose-400" :
+    ["script", "style", "link", "meta"].includes(node.tag) ? "text-slate-500" :
+    ["p", "span", "strong", "em", "code", "pre"].includes(node.tag) ? "text-slate-300" :
+    "text-slate-400";
 
   return (
-    <div className="flex flex-col select-none">
-      <div 
-        onClick={hasChildren ? toggleExpand : undefined}
-        className={`flex items-center py-1.5 px-2 rounded-md font-mono text-sm transition-colors group ${
-          hasChildren ? "cursor-pointer hover:bg-zinc-800/50" : ""
-        }`}
-        style={{ paddingLeft: `${depth * 16 + 8}px` }}
+    <div className="select-none">
+      <div
+        className={`flex items-start gap-1 py-0.5 px-1 rounded cursor-pointer group hover:bg-white/[0.03] transition-colors`}
+        style={{ paddingLeft: `${depth * 14 + 4}px` }}
+        onClick={() => hasChildren && setOpen(!open)}
       >
-        <span className="w-5 h-5 flex items-center justify-center mr-1 text-zinc-500">
+        {/* Expand icon */}
+        <span className="mt-1 flex-shrink-0 w-3 h-3">
           {hasChildren ? (
-            isExpanded ? <ChevronDown className="w-4 h-4 text-zinc-400" /> : <ChevronRight className="w-4 h-4 text-zinc-400" />
+            open
+              ? <ChevronDown className="w-3 h-3 text-slate-600 group-hover:text-slate-400 transition-colors" />
+              : <ChevronRight className="w-3 h-3 text-slate-600 group-hover:text-slate-400 transition-colors" />
           ) : (
-            <span className="w-1.5 h-1.5 rounded-full bg-zinc-700" />
+            <span className="block w-1.5 h-1.5 rounded-full bg-slate-800 mt-1 ml-0.5" />
           )}
         </span>
 
-        <FileCode className={`w-3.5 h-3.5 mr-1.5 ${hasChildren ? "text-purple-400" : "text-zinc-500"}`} />
+        {/* Tag name */}
+        <span className={`font-mono text-[11px] font-semibold ${tagColor}`}>
+          &lt;{node.tag}
+        </span>
 
-        <span className="text-purple-400 font-semibold">&lt;{node.tag}</span>
-
+        {/* Attributes */}
         {node.id && (
-          <span className="text-sky-400 flex items-center ml-1 text-xs">
-            <Hash className="w-3 h-3 text-sky-500/80 mr-0.5" />
-            {node.id}
+          <span className="font-mono text-[11px] text-amber-500/80 ml-0.5">
+            #{node.id}
+          </span>
+        )}
+        {node.classes && node.classes.length > 0 && (
+          <span className="font-mono text-[11px] text-violet-400/60 ml-0.5 truncate max-w-[180px]">
+            .{node.classes.slice(0, 2).join(".")}
+            {node.classes.length > 2 && <span className="text-slate-600">+{node.classes.length - 2}</span>}
           </span>
         )}
 
-        {classString && (
-          <span className="text-yellow-400/90 ml-1 text-xs truncate max-w-[200px]" title={classString}>
-            {classString}
+        {/* Text preview */}
+        {node.textContent && !hasChildren && (
+          <span className="font-mono text-[10px] text-slate-600 ml-1 italic truncate max-w-[120px]">
+            "{node.textContent}"
           </span>
         )}
 
-        {renderAttributes()}
+        {/* Close tag or self-close */}
+        <span className={`font-mono text-[11px] ${tagColor}`}>
+          {hasChildren ? ">" : " />"}
+        </span>
 
-        <span className="text-purple-400 font-semibold">&gt;</span>
-
-        {node.textContent && !isExpanded && (
-          <span className="text-zinc-400 text-xs ml-2 italic max-w-[150px] truncate">
-            {node.textContent}
-          </span>
-        )}
-
-        {hasChildren && !isExpanded && (
-          <span className="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-zinc-800 text-zinc-400 border border-zinc-700/60 font-sans">
+        {/* Child count badge */}
+        {hasChildren && !open && (
+          <span className="ml-1 text-[9px] font-mono bg-white/5 text-slate-500 px-1.5 py-0.5 rounded border border-white/5">
             {node.children.length} child{node.children.length !== 1 ? "ren" : ""}
           </span>
         )}
       </div>
 
-      {hasChildren && isExpanded && (
-        <div className="flex flex-col relative border-l border-zinc-800/80 ml-5 pl-1 my-0.5">
-          {node.children.map((child, idx) => (
-            <DOMTreeViewer key={idx} node={child} depth={depth + 1} />
+      {/* Children */}
+      {hasChildren && open && (
+        <div>
+          {node.children.map((child, i) => (
+            <DOMTreeViewer key={i} node={child} depth={depth + 1} />
           ))}
-        </div>
-      )}
-
-      {hasChildren && isExpanded && (
-        <div 
-          className="py-1 px-2 font-mono text-sm text-purple-400/50 select-none"
-          style={{ paddingLeft: `${depth * 16 + 28}px` }}
-        >
-          &lt;/{node.tag}&gt;
+          <div
+            className="font-mono text-[11px] py-0.5 px-1"
+            style={{ paddingLeft: `${depth * 14 + 4}px` }}
+          >
+            <span className={`${tagColor}`}>&lt;/{node.tag}&gt;</span>
+          </div>
         </div>
       )}
     </div>
