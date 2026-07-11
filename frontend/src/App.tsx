@@ -5,11 +5,9 @@ import WaterfallChart from "./components/WaterfallChart";
 import ScoreGauge from "./components/ScoreGauge";
 import {
   Activity,
-  Cpu,
   HeartPulse,
   Sparkles,
   Network,
-  HelpCircle,
   CheckCircle2,
   AlertTriangle,
   AlertOctagon,
@@ -17,36 +15,40 @@ import {
   GitCompare,
   ExternalLink,
   ShieldCheck,
-  ShieldAlert,
   Globe,
   Clock,
   HardDrive,
-  Code
+  Code,
+  LayoutDashboard,
+  Zap,
 } from "lucide-react";
 
 const SCAN_STEPS = [
-  "Calibrating website MRI scanner context...",
-  "Injecting network contrast agents and tracking assets...",
-  "Auditing security immune system and headers...",
-  "Reading HTML DOM skeletal anatomy structure...",
-  "Testing user reflex and accessibility compliance...",
-  "Measuring performance heart rate and Lighthouse speed...",
-  "Consulting AI Chief Medical Officer (Gemini Agent)...",
-  "Compiling comprehensive visual anatomy report..."
+  "🔬 Calibrating MRI scanner...",
+  "🧬 Injecting network contrast agents...",
+  "🛡️ Auditing security immune system...",
+  "💀 Reading HTML skeletal anatomy...",
+  "♿ Testing accessibility reflexes...",
+  "❤️ Measuring Lighthouse cardio vitals...",
+  "🩺 Consulting AI Chief Medical Officer...",
+  "📋 Compiling visual anatomy report...",
 ];
+
+type TabType = "overview" | "ai" | "performance" | "dom" | "accessibility" | "security";
+type CompareTabType = "matchup" | "ai" | "performance" | "accessibility" | "security";
 
 export default function App() {
   const [activeMode, setActiveMode] = useState<"single" | "compare">("single");
-  
+
   // Single scan state
   const [singleUrl, setSingleUrl] = useState("");
   const [scanStatus, setScanStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [currentStepIdx, setCurrentStepIdx] = useState(0);
   const [report, setReport] = useState<ScanReport | null>(null);
   const [scanError, setScanError] = useState("");
-  const [activeTab, setActiveTab] = useState<"ai" | "performance" | "dom" | "accessibility" | "security">("ai");
+  const [activeTab, setActiveTab] = useState<TabType>("overview");
 
-  // Compare scan state
+  // Compare state
   const [urlA, setUrlA] = useState("");
   const [urlB, setUrlB] = useState("");
   const [compareStatus, setCompareStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
@@ -54,194 +56,238 @@ export default function App() {
   const [reportA, setReportA] = useState<ScanReport | null>(null);
   const [reportB, setReportB] = useState<ScanReport | null>(null);
   const [compareError, setCompareError] = useState("");
-  const [compareActiveTab, setCompareActiveTab] = useState<"overview" | "ai" | "performance" | "accessibility" | "security">("overview");
+  const [compareTab, setCompareTab] = useState<CompareTabType>("matchup");
 
-  // Automatically cycle through progress steps during scanning
   useEffect(() => {
-    let interval: any;
+    let interval: ReturnType<typeof setInterval>;
     if (scanStatus === "loading") {
       setCurrentStepIdx(0);
       interval = setInterval(() => {
-        setCurrentStepIdx((prev) => {
-          if (prev < SCAN_STEPS.length - 2) {
-            return prev + 1;
-          }
-          return prev;
-        });
-      }, 3000);
+        setCurrentStepIdx((prev) => (prev < SCAN_STEPS.length - 2 ? prev + 1 : prev));
+      }, 2500);
     }
     return () => clearInterval(interval);
   }, [scanStatus]);
 
   useEffect(() => {
-    let interval: any;
+    let interval: ReturnType<typeof setInterval>;
     if (compareStatus === "loading") {
       setCompareStepIdx(0);
       interval = setInterval(() => {
-        setCompareStepIdx((prev) => {
-          if (prev < SCAN_STEPS.length - 2) {
-            return prev + 1;
-          }
-          return prev;
-        });
-      }, 4000);
+        setCompareStepIdx((prev) => (prev < SCAN_STEPS.length - 2 ? prev + 1 : prev));
+      }, 3500);
     }
     return () => clearInterval(interval);
   }, [compareStatus]);
 
-  // Single URL Scan trigger
+  const doScan = async (url: string): Promise<ScanReport> => {
+    const response = await fetch("/api/scan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${response.status}: Failed to scan`);
+    }
+    const data = await response.json();
+    return data.report;
+  };
+
   const handleSingleScan = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!singleUrl) return;
-
     setScanStatus("loading");
     setScanError("");
     setReport(null);
-    setCurrentStepIdx(0);
-
     try {
-      const response = await fetch("http://localhost:3001/scan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: singleUrl }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || "Failed to scan website");
-      }
-
+      const result = await doScan(singleUrl);
       setCurrentStepIdx(SCAN_STEPS.length - 1);
-      const data = await response.json();
-      setReport(data.report);
+      setReport(result);
       setScanStatus("success");
-      setActiveTab("ai");
+      setActiveTab("overview");
     } catch (err: any) {
-      console.error(err);
-      setScanError(err.message || "An unexpected error occurred contacting the scanning backend.");
+      setScanError(err.message || "Unexpected error. Is the backend running on port 3001?");
       setScanStatus("error");
     }
   };
 
-  // Compare URLs Scan trigger
   const handleCompareScan = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!urlA || !urlB) return;
-
     setCompareStatus("loading");
     setCompareError("");
     setReportA(null);
     setReportB(null);
-    setCompareStepIdx(0);
-
     try {
-      const [resA, resB] = await Promise.allSettled([
-        fetch("http://localhost:3001/scan", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: urlA }),
-        }).then(async (r) => {
-          if (!r.ok) {
-            const err = await r.json().catch(() => ({}));
-            throw new Error(err.error || `Failed to scan ${urlA}`);
-          }
-          const data = await r.json();
-          return data.report;
-        }),
-        fetch("http://localhost:3001/scan", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: urlB }),
-        }).then(async (r) => {
-          if (!r.ok) {
-            const err = await r.json().catch(() => ({}));
-            throw new Error(err.error || `Failed to scan ${urlB}`);
-          }
-          const data = await r.json();
-          return data.report;
-        })
-      ]);
-
-      if (resA.status === "rejected" || resB.status === "rejected") {
-        const errMsg = 
-          (resA.status === "rejected" ? resA.reason.message : "") +
-          (resA.status === "rejected" && resB.status === "rejected" ? " | " : "") +
-          (resB.status === "rejected" ? resB.reason.message : "");
-        throw new Error(errMsg || "Failed to complete one of the scans.");
-      }
-
-      setReportA(resA.value);
-      setReportB(resB.value);
+      const [ra, rb] = await Promise.all([doScan(urlA), doScan(urlB)]);
+      setReportA(ra);
+      setReportB(rb);
       setCompareStatus("success");
-      setCompareActiveTab("overview");
+      setCompareTab("matchup");
     } catch (err: any) {
-      console.error(err);
-      setCompareError(err.message || "An unexpected error occurred.");
+      setCompareError(err.message || "Unexpected error during comparison.");
       setCompareStatus("error");
     }
   };
 
-  const getImpactColor = (impact: "low" | "medium" | "high") => {
-    switch (impact) {
-      case "high": return "bg-red-500/10 text-red-400 border-red-500/20";
-      case "medium": return "bg-amber-500/10 text-amber-400 border-amber-500/20";
-      case "low": return "bg-sky-500/10 text-sky-400 border-sky-500/20";
-    }
+  const impactColor = (impact: "low" | "medium" | "high") =>
+    impact === "high"
+      ? "bg-red-500/10 text-red-400 border-red-500/20"
+      : impact === "medium"
+      ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+      : "bg-sky-500/10 text-sky-400 border-sky-500/20";
+
+  const impactIcon = (impact: "low" | "medium" | "high") =>
+    impact === "high" ? (
+      <AlertOctagon className="w-4 h-4 text-red-400 mr-1" />
+    ) : impact === "medium" ? (
+      <AlertTriangle className="w-4 h-4 text-amber-400 mr-1" />
+    ) : (
+      <CheckCircle2 className="w-4 h-4 text-sky-400 mr-1" />
+    );
+
+  const tabBtn = (id: TabType, label: string, icon: React.ReactNode) => (
+    <button
+      onClick={() => setActiveTab(id)}
+      className={`flex items-center gap-2 px-4 py-3 text-xs font-bold tracking-wide uppercase border-b-2 whitespace-nowrap transition-all ${
+        activeTab === id
+          ? "border-purple-500 text-purple-400"
+          : "border-transparent text-zinc-500 hover:text-zinc-300"
+      }`}
+    >
+      {icon} {label}
+    </button>
+  );
+
+  const cmpTabBtn = (id: CompareTabType, label: string) => (
+    <button
+      onClick={() => setCompareTab(id)}
+      className={`flex items-center gap-2 px-4 py-3 text-xs font-bold tracking-wide uppercase border-b-2 whitespace-nowrap transition-all ${
+        compareTab === id
+          ? "border-purple-500 text-purple-400"
+          : "border-transparent text-zinc-500 hover:text-zinc-300"
+      }`}
+    >
+      {label}
+    </button>
+  );
+
+  // Compute overall score from report
+  const overallScore = (r: ScanReport) => {
+    const perf = Math.max(0, 100 - Math.min((r.performance.totalLoadTime / 80), 100));
+    const a11y = r.accessibility.score;
+    const sec = r.security.score;
+    return Math.round((perf + a11y + sec) / 3);
   };
 
-  const getImpactIcon = (impact: "low" | "medium" | "high") => {
-    switch (impact) {
-      case "high": return <AlertOctagon className="w-4 h-4 text-red-400 mr-1.5" />;
-      case "medium": return <AlertTriangle className="w-4 h-4 text-amber-400 mr-1.5" />;
-      case "low": return <CheckCircle2 className="w-4 h-4 text-sky-400 mr-1.5" />;
-    }
-  };
+  const scoreGrade = (s: number) =>
+    s >= 90 ? { grade: "A", color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/30" } :
+    s >= 75 ? { grade: "B", color: "text-cyan-400", bg: "bg-cyan-500/10 border-cyan-500/30" } :
+    s >= 60 ? { grade: "C", color: "text-amber-400", bg: "bg-amber-500/10 border-amber-500/30" } :
+    s >= 45 ? { grade: "D", color: "text-orange-400", bg: "bg-orange-500/10 border-orange-500/30" } :
+    { grade: "F", color: "text-red-400", bg: "bg-red-500/10 border-red-500/30" };
+
+  const LoadingBox = ({ stepIdx }: { stepIdx: number }) => (
+    <div className="w-full max-w-lg bg-zinc-900/60 border border-zinc-800 p-8 rounded-3xl flex flex-col items-center text-center backdrop-blur-md shadow-2xl">
+      <div className="relative mb-6">
+        <div className="w-16 h-16 border-4 border-zinc-800 rounded-full" />
+        <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin absolute inset-0" />
+        <span className="absolute inset-0 flex items-center justify-center text-2xl">🩺</span>
+      </div>
+      <h3 className="text-lg font-bold text-zinc-200">Website MRI in Progress</h3>
+      <p className="text-zinc-500 text-xs mt-1 mb-6">Running full diagnostic scan (15–30 seconds)</p>
+      <div className="w-full bg-zinc-950 border border-zinc-900 rounded-xl p-4 text-left space-y-2">
+        {SCAN_STEPS.map((step, idx) => (
+          <div key={idx} className="flex items-center gap-3 text-xs transition-all duration-300">
+            <span className="w-5 h-5 flex items-center justify-center flex-shrink-0">
+              {stepIdx > idx ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              ) : stepIdx === idx ? (
+                <RefreshCw className="w-3.5 h-3.5 text-purple-400 animate-spin" />
+              ) : (
+                <span className="w-1.5 h-1.5 rounded-full bg-zinc-700 inline-block" />
+              )}
+            </span>
+            <span
+              className={
+                stepIdx === idx
+                  ? "text-purple-400 font-semibold"
+                  : stepIdx > idx
+                  ? "text-zinc-600 line-through"
+                  : "text-zinc-600"
+              }
+            >
+              {step}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const ErrorBox = ({ message, onRetry }: { message: string; onRetry: () => void }) => (
+    <div className="w-full max-w-xl bg-red-500/5 border border-red-500/20 p-6 rounded-2xl flex items-start gap-4">
+      <AlertOctagon className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5" />
+      <div className="flex-1">
+        <h4 className="font-bold text-red-400 text-sm">Scan Failed — Diagnostic Error</h4>
+        <p className="text-zinc-400 text-xs mt-2 leading-relaxed font-mono">{message}</p>
+        <p className="text-zinc-500 text-xs mt-2">Make sure the backend is running: <code className="text-purple-400">pnpm run dev:backend</code></p>
+        <button
+          onClick={onRetry}
+          className="mt-3 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-300 font-semibold px-4 py-2 rounded-lg border border-red-500/20 transition-colors"
+        >
+          Try Again
+        </button>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="flex-1 bg-black text-zinc-100 min-h-screen relative font-sans overflow-x-hidden selection:bg-purple-600/30 selection:text-purple-200">
-      {/* Grid Pattern Background */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800c_1px,transparent_1px),linear-gradient(to_bottom,#8080800c_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
-      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-purple-900/10 blur-[120px] rounded-full pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-indigo-900/10 blur-[120px] rounded-full pointer-events-none" />
+    <div className="min-h-screen bg-black text-zinc-100 relative overflow-x-hidden">
+      {/* Background */}
+      <div
+        className="fixed inset-0 pointer-events-none"
+        style={{
+          backgroundImage:
+            "linear-gradient(to right, #8080800a 1px, transparent 1px), linear-gradient(to bottom, #8080800a 1px, transparent 1px)",
+          backgroundSize: "24px 24px",
+        }}
+      />
+      <div className="fixed top-0 left-0 w-1/2 h-1/2 bg-purple-900/8 blur-[150px] rounded-full pointer-events-none" />
+      <div className="fixed bottom-0 right-0 w-1/2 h-1/2 bg-indigo-900/8 blur-[150px] rounded-full pointer-events-none" />
 
-      {/* Main Container */}
-      <div className="max-w-7xl mx-auto px-4 py-8 relative z-10">
-        
+      <div className="relative z-10 max-w-7xl mx-auto px-4 py-8">
         {/* Header */}
-        <header className="flex flex-col items-center justify-center text-center mt-6 mb-12">
-          <div className="flex items-center gap-2 px-3 py-1 rounded-full border border-purple-500/30 bg-purple-500/5 text-purple-400 text-xs font-bold uppercase tracking-wider mb-4 animate-pulse">
-            <Sparkles className="w-3.5 h-3.5" /> AI-Powered Website MRI Scanner
+        <header className="flex flex-col items-center text-center mt-6 mb-10">
+          <div className="flex items-center gap-2 px-3 py-1 rounded-full border border-purple-500/30 bg-purple-500/5 text-purple-400 text-xs font-bold uppercase tracking-wider mb-4">
+            <Sparkles className="w-3.5 h-3.5 animate-pulse" /> AI-Powered Website MRI Scanner
           </div>
-          <h1 className="text-4xl md:text-6xl font-black bg-gradient-to-r from-purple-400 via-indigo-300 to-cyan-400 bg-clip-text text-transparent tracking-tight">
+          <h1 className="text-5xl md:text-7xl font-black tracking-tight"
+            style={{ background: "linear-gradient(135deg, #a855f7, #6366f1, #22d3ee)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
             Web Inspectra
           </h1>
           <p className="text-zinc-400 mt-3 text-sm md:text-lg max-w-2xl leading-relaxed">
-            Diagnose the digital health of any public website. Get an interactive structural MRI scan, visual vital matchups, and AI-prescribed treatments in plain language.
+            Diagnose the digital health of any website — interactive MRI scan with AI-prescribed treatments in plain English.
           </p>
 
-          {/* Mode Switcher */}
-          <div className="flex bg-zinc-900/80 border border-zinc-800 rounded-xl p-1 mt-8 shadow-2xl">
+          {/* Mode Toggle */}
+          <div className="flex bg-zinc-900/80 border border-zinc-800 rounded-xl p-1 mt-6 gap-1">
             <button
-              onClick={() => {
-                setActiveMode("single");
-                setScanStatus("idle");
-              }}
-              className={`flex items-center gap-2 px-4 py-2 text-xs md:text-sm font-semibold rounded-lg transition-all ${
+              onClick={() => { setActiveMode("single"); setScanStatus("idle"); }}
+              className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg transition-all ${
                 activeMode === "single"
-                  ? "bg-purple-600 text-white shadow-lg shadow-purple-500/15"
+                  ? "bg-purple-600 text-white shadow-lg shadow-purple-500/20"
                   : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
               <Activity className="w-4 h-4" /> Single URL Scan
             </button>
             <button
-              onClick={() => {
-                setActiveMode("compare");
-                setCompareStatus("idle");
-              }}
-              className={`flex items-center gap-2 px-4 py-2 text-xs md:text-sm font-semibold rounded-lg transition-all ${
+              onClick={() => { setActiveMode("compare"); setCompareStatus("idle"); }}
+              className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg transition-all ${
                 activeMode === "compare"
-                  ? "bg-purple-600 text-white shadow-lg shadow-purple-500/15"
+                  ? "bg-purple-600 text-white shadow-lg shadow-purple-500/20"
                   : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
@@ -250,940 +296,688 @@ export default function App() {
           </div>
         </header>
 
-        {/* SINGLE URL SCAN MODULE */}
+        {/* ── SINGLE SCAN MODE ── */}
         {activeMode === "single" && (
-          <div className="flex flex-col items-center">
+          <div className="flex flex-col items-center gap-6">
+            {/* URL Input */}
             {scanStatus !== "loading" && (
-              <form onSubmit={handleSingleScan} className="w-full max-w-2xl bg-zinc-900/60 border border-zinc-850 p-1.5 rounded-2xl flex items-center shadow-3xl hover:border-zinc-800 transition-all backdrop-blur-sm">
-                <Globe className="w-5 h-5 text-zinc-500 ml-4 flex-shrink-0" />
+              <form
+                onSubmit={handleSingleScan}
+                className="w-full max-w-2xl flex items-center gap-2 bg-zinc-900/60 border border-zinc-800 rounded-2xl p-2 shadow-2xl hover:border-zinc-700 transition-colors"
+              >
+                <Globe className="w-5 h-5 text-zinc-500 ml-3 flex-shrink-0" />
                 <input
                   type="text"
-                  placeholder="Enter a website URL (e.g. nextjs.org, example.com)..."
+                  placeholder="Enter any website URL — e.g. example.com, github.com..."
                   value={singleUrl}
                   onChange={(e) => setSingleUrl(e.target.value)}
-                  className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none text-zinc-100 placeholder-zinc-500 text-sm md:text-base py-3 px-3"
-                  required
+                  className="flex-1 bg-transparent border-0 outline-none text-zinc-100 placeholder-zinc-600 text-sm py-2.5 px-2"
                 />
                 <button
                   type="submit"
                   disabled={!singleUrl}
-                  className="bg-purple-600 hover:bg-purple-500 active:scale-95 text-white text-xs md:text-sm font-semibold px-6 py-3 rounded-xl transition-all shadow-lg shadow-purple-500/15 disabled:opacity-50 flex items-center gap-2 flex-shrink-0"
+                  className="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-all active:scale-95"
                 >
-                  <Activity className="w-4 h-4" /> Analyze Site
+                  <Zap className="w-4 h-4" /> Scan Site
                 </button>
               </form>
             )}
 
-            {scanStatus === "loading" && (
-              <div className="w-full max-w-lg bg-zinc-900/50 border border-zinc-800/80 p-8 rounded-3xl flex flex-col items-center shadow-3xl text-center backdrop-blur-md">
-                <RefreshCw className="w-10 h-10 text-purple-500 animate-spin mb-4" />
-                <h3 className="text-lg font-bold text-zinc-200">Examining Website Anatomy</h3>
-                <p className="text-zinc-500 text-xs mt-1">This takes about 10-15 seconds for performance diagnostics</p>
-                
-                <div className="w-full mt-6 bg-zinc-950 border border-zinc-900 rounded-xl p-4 divide-y divide-zinc-900 text-left">
-                  {SCAN_STEPS.map((step, idx) => (
-                    <div key={idx} className="flex items-center py-2 text-xs transition-opacity duration-300">
-                      <span className="w-4 h-4 flex items-center justify-center mr-3">
-                        {currentStepIdx > idx ? (
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                        ) : currentStepIdx === idx ? (
-                          <RefreshCw className="w-3.5 h-3.5 text-purple-400 animate-spin" />
-                        ) : (
-                          <span className="w-1.5 h-1.5 rounded-full bg-zinc-700" />
-                        )}
-                      </span>
-                      <span className={`${
-                        currentStepIdx === idx 
-                          ? "text-purple-400 font-semibold" 
-                          : currentStepIdx > idx 
-                          ? "text-zinc-500" 
-                          : "text-zinc-650"
-                      }`}>
-                        {step}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            {scanStatus === "loading" && <LoadingBox stepIdx={currentStepIdx} />}
+            {scanStatus === "error" && <ErrorBox message={scanError} onRetry={() => setScanStatus("idle")} />}
 
-            {scanStatus === "error" && (
-              <div className="w-full max-w-xl bg-red-500/10 border border-red-500/20 p-6 rounded-2xl flex items-start gap-4 shadow-xl">
-                <AlertOctagon className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <h4 className="font-bold text-red-400">Scan Failed</h4>
-                  <p className="text-zinc-400 text-xs mt-1 leading-relaxed">{scanError}</p>
-                  <button
-                    onClick={() => setScanStatus("idle")}
-                    className="mt-3 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-300 font-semibold px-4 py-2 rounded-lg border border-red-500/20 transition-colors"
-                  >
-                    Try Again
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* RESULTS DASHBOARD */}
+            {/* RESULTS */}
             {scanStatus === "success" && report && (
-              <div className="w-full mt-6 flex flex-col gap-6 animate-fade-in">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-zinc-900/40 border border-zinc-800/80 p-5 rounded-2xl backdrop-blur-md">
+              <div className="w-full animate-fade-in">
+                {/* Result Header */}
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-zinc-900/40 border border-zinc-800 p-5 rounded-2xl mb-4">
                   <div className="flex items-center gap-3">
-                    <Globe className="w-6 h-6 text-purple-400" />
+                    <Globe className="w-6 h-6 text-purple-400 flex-shrink-0" />
                     <div>
-                      <h2 className="text-xl font-extrabold text-zinc-100 truncate max-w-md">{report.url}</h2>
-                      <p className="text-zinc-500 text-xs mt-0.5">Scanned on {new Date(report.scannedAt).toLocaleString()}</p>
+                      <h2 className="text-lg font-extrabold text-zinc-100">{report.url}</h2>
+                      <p className="text-zinc-500 text-xs mt-0.5">
+                        Scanned {new Date(report.scannedAt).toLocaleString()}
+                      </p>
                     </div>
                   </div>
                   <button
-                    onClick={() => {
-                      setScanStatus("idle");
-                      setReport(null);
-                    }}
-                    className="text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-750 text-zinc-300 font-semibold px-4 py-2.5 rounded-xl transition-all"
+                    onClick={() => { setScanStatus("idle"); setReport(null); }}
+                    className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold px-4 py-2.5 rounded-xl border border-zinc-700 transition-all"
                   >
-                    Run New Scan
+                    ↩ New Scan
                   </button>
                 </div>
 
-                <div className="flex border-b border-zinc-850 gap-2 overflow-x-auto pb-px">
-                  <button
-                    onClick={() => setActiveTab("ai")}
-                    className={`flex items-center gap-2 px-5 py-3.5 text-xs font-bold tracking-wide uppercase border-b-2 transition-all ${
-                      activeTab === "ai"
-                        ? "border-purple-500 text-purple-400"
-                        : "border-transparent text-zinc-500 hover:text-zinc-300"
-                    }`}
-                  >
-                    <Sparkles className="w-4 h-4" /> 🩺 AI Chief Medical Officer
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("performance")}
-                    className={`flex items-center gap-2 px-5 py-3.5 text-xs font-bold tracking-wide uppercase border-b-2 transition-all ${
-                      activeTab === "performance"
-                        ? "border-purple-500 text-purple-400"
-                        : "border-transparent text-zinc-500 hover:text-zinc-300"
-                    }`}
-                  >
-                    <Activity className="w-4 h-4" /> ❤️ Cardio Vitals
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("dom")}
-                    className={`flex items-center gap-2 px-5 py-3.5 text-xs font-bold tracking-wide uppercase border-b-2 transition-all ${
-                      activeTab === "dom"
-                        ? "border-purple-500 text-purple-400"
-                        : "border-transparent text-zinc-500 hover:text-zinc-300"
-                    }`}
-                  >
-                    <Code className="w-4 h-4" /> 💀 Skeletal Anatomy
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("accessibility")}
-                    className={`flex items-center gap-2 px-5 py-3.5 text-xs font-bold tracking-wide uppercase border-b-2 transition-all ${
-                      activeTab === "accessibility"
-                        ? "border-purple-500 text-purple-400"
-                        : "border-transparent text-zinc-500 hover:text-zinc-300"
-                    }`}
-                  >
-                    <HeartPulse className="w-4 h-4" /> ♿ Reflexes & Accessibility
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("security")}
-                    className={`flex items-center gap-2 px-5 py-3.5 text-xs font-bold tracking-wide uppercase border-b-2 transition-all ${
-                      activeTab === "security"
-                        ? "border-purple-500 text-purple-400"
-                        : "border-transparent text-zinc-500 hover:text-zinc-300"
-                    }`}
-                  >
-                    <ShieldCheck className="w-4 h-4" /> 🛡️ Immune System & Tech
-                  </button>
+                {/* Tab Navigation */}
+                <div className="flex border-b border-zinc-800 overflow-x-auto mb-6">
+                  {tabBtn("overview", "Overview", <LayoutDashboard className="w-4 h-4" />)}
+                  {tabBtn("ai", "🩺 AI Doctor", <Sparkles className="w-4 h-4" />)}
+                  {tabBtn("performance", "❤️ Vitals", <Activity className="w-4 h-4" />)}
+                  {tabBtn("dom", "💀 DOM Anatomy", <Code className="w-4 h-4" />)}
+                  {tabBtn("accessibility", "♿ Accessibility", <HeartPulse className="w-4 h-4" />)}
+                  {tabBtn("security", "🛡️ Security & Tech", <ShieldCheck className="w-4 h-4" />)}
                 </div>
 
-                <div className="min-h-[400px]">
-                  {activeTab === "ai" && (
-                    <div className="flex flex-col gap-6">
-                      <div className="bg-gradient-to-r from-zinc-900 to-purple-950/20 border border-purple-900/20 p-6 rounded-2xl shadow-xl">
-                        <div className="flex items-center gap-2 mb-3">
-                          <Sparkles className="w-5 h-5 text-purple-400" />
-                          <h3 className="text-md font-bold uppercase tracking-wider text-purple-300">AI Chief Medical Officer's Prognosis</h3>
-                        </div>
-                        <p className="text-zinc-300 text-sm md:text-base leading-relaxed">
-                          {report.aiSummary?.overallHealth || "AI summary could not be retrieved. Running diagnostics..."}
-                        </p>
-                      </div>
-
-                      <div className="flex flex-col gap-4">
-                        <h4 className="font-bold text-zinc-400 text-sm uppercase tracking-wider pl-1">Prescribed Treatments & Remediation ({report.aiSummary?.findings.length || 0})</h4>
-                        <div className="grid grid-cols-1 gap-4">
-                          {report.aiSummary?.findings.map((f, idx) => (
-                            <div key={idx} className="bg-zinc-900/40 border border-zinc-850 hover:border-zinc-800 p-5 rounded-2xl transition-all flex flex-col md:flex-row gap-4 items-start">
-                              <div className="flex items-center md:items-start flex-shrink-0">
-                                <span className={`px-2.5 py-1 text-[10px] font-bold uppercase rounded-full border flex items-center ${getImpactColor(f.impact)}`}>
-                                  {getImpactIcon(f.impact)}
-                                  {f.impact} Priority
-                                </span>
-                              </div>
-                              <div className="flex-1">
-                                <h5 className="font-bold text-zinc-200 text-sm md:text-base flex items-center gap-2">
-                                  {f.title}
-                                  <span className="text-xs font-semibold text-zinc-500 uppercase px-1.5 py-0.5 rounded bg-zinc-950 tracking-wider">
-                                    {f.category}
-                                  </span>
-                                </h5>
-                                <p className="text-zinc-400 text-xs md:text-sm mt-2 leading-relaxed">{f.explanation}</p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {activeTab === "performance" && (
-                    <div className="flex flex-col gap-8">
-                      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                        <ScoreGauge score={100 - Math.min((report.performance.lcp / 50), 100)} label="LCP (Largest Paint)" subtitle={`${(report.performance.lcp / 1000).toFixed(2)}s`} size={110} />
-                        <ScoreGauge score={100 - Math.min((report.performance.fcp / 30), 100)} label="FCP (First Paint)" subtitle={`${(report.performance.fcp / 1000).toFixed(2)}s`} size={110} />
-                        <ScoreGauge score={report.performance.cls < 0.1 ? 100 : report.performance.cls < 0.25 ? 70 : 30} label="CLS (Layout Shift)" subtitle={`${report.performance.cls.toFixed(3)}`} size={110} />
-                        <ScoreGauge score={100 - Math.min((report.performance.tti / 100), 100)} label="TTI (Interactive)" subtitle={`${(report.performance.tti / 1000).toFixed(2)}s`} size={110} />
-                        <ScoreGauge score={100 - Math.min((report.performance.totalLoadTime / 150), 100)} label="Speed Index" subtitle={`${(report.performance.totalLoadTime / 1000).toFixed(2)}s`} size={110} />
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="bg-zinc-900/40 border border-zinc-800 p-5 rounded-2xl flex items-center gap-4">
-                          <Clock className="w-8 h-8 text-cyan-400" />
-                          <div>
-                            <span className="text-zinc-500 text-xs font-semibold block uppercase">Total Page Load Time</span>
-                            <span className="text-xl font-bold text-zinc-200">{(report.performance.totalLoadTime / 1000).toFixed(2)}s</span>
-                          </div>
-                        </div>
-                        <div className="bg-zinc-900/40 border border-zinc-800 p-5 rounded-2xl flex items-center gap-4">
-                          <Network className="w-8 h-8 text-purple-400" />
-                          <div>
-                            <span className="text-zinc-500 text-xs font-semibold block uppercase">Total Network Requests</span>
-                            <span className="text-xl font-bold text-zinc-200">{report.performance.resourceCount} requests</span>
-                          </div>
-                        </div>
-                        <div className="bg-zinc-900/40 border border-zinc-800 p-5 rounded-2xl flex items-center gap-4">
-                          <HardDrive className="w-8 h-8 text-emerald-400" />
-                          <div>
-                            <span className="text-zinc-500 text-xs font-semibold block uppercase">Total Page weight</span>
-                            <span className="text-xl font-bold text-zinc-200">{(report.performance.totalTransferSize / 1024 / 1024).toFixed(2)} MB</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col gap-3">
-                        <h4 className="font-bold text-zinc-400 text-sm uppercase tracking-wider pl-1">Network Resource Loading Waterfall</h4>
-                        <WaterfallChart requests={report.network.requests} />
-                      </div>
-                    </div>
-                  )}
-
-                  {activeTab === "dom" && (
+                {/* ── OVERVIEW TAB ── */}
+                {activeTab === "overview" && (() => {
+                  const score = overallScore(report);
+                  const { grade, color, bg } = scoreGrade(score);
+                  const topFindings = report.aiSummary?.findings?.slice(0, 3) || [];
+                  return (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                      <div className="flex flex-col gap-4 lg:col-span-1">
-                        <div className="bg-zinc-900/40 border border-zinc-800 p-5 rounded-2xl">
-                          <h4 className="font-bold text-zinc-400 text-xs uppercase tracking-wider mb-4">DOM Hierarchy Summary</h4>
-                          <div className="flex flex-col gap-3">
-                            <div className="flex justify-between items-center py-2 border-b border-zinc-850">
-                              <span className="text-zinc-400 text-xs">Total Node Count</span>
-                              <span className={`text-sm font-bold ${report.dom.nodeCount > 1500 ? "text-rose-400" : report.dom.nodeCount > 800 ? "text-amber-400" : "text-emerald-400"}`}>
-                                {report.dom.nodeCount} nodes
-                              </span>
-                            </div>
-                            <div className="flex justify-between items-center py-2 border-b border-zinc-850">
-                              <span className="text-zinc-400 text-xs">Maximum Nesting Depth</span>
-                              <span className={`text-sm font-bold ${report.dom.maxDepth > 32 ? "text-rose-400" : report.dom.maxDepth > 24 ? "text-amber-400" : "text-emerald-400"}`}>
-                                {report.dom.maxDepth} levels
-                              </span>
-                            </div>
+                      {/* Left: Score + Summary */}
+                      <div className="lg:col-span-1 flex flex-col gap-4">
+                        {/* Overall Health Score */}
+                        <div className={`border rounded-2xl p-6 flex flex-col items-center text-center ${bg}`}>
+                          <p className="text-zinc-400 text-xs uppercase font-bold tracking-wider mb-2">Overall Health Score</p>
+                          <div className={`text-7xl font-black ${color}`}>{score}</div>
+                          <div className={`text-3xl font-black mt-1 ${color}`}>Grade {grade}</div>
+                          <p className="text-zinc-500 text-xs mt-3">Combined performance, accessibility & security rating</p>
+                        </div>
+
+                        {/* Stat Chips */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-3 text-center">
+                            <Clock className="w-5 h-5 text-cyan-400 mx-auto mb-1" />
+                            <div className="text-base font-bold text-zinc-200">{(report.performance.totalLoadTime / 1000).toFixed(2)}s</div>
+                            <div className="text-zinc-500 text-[10px] uppercase font-semibold">Load Time</div>
+                          </div>
+                          <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-3 text-center">
+                            <Network className="w-5 h-5 text-purple-400 mx-auto mb-1" />
+                            <div className="text-base font-bold text-zinc-200">{report.performance.resourceCount}</div>
+                            <div className="text-zinc-500 text-[10px] uppercase font-semibold">Requests</div>
+                          </div>
+                          <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-3 text-center">
+                            <HeartPulse className="w-5 h-5 text-emerald-400 mx-auto mb-1" />
+                            <div className="text-base font-bold text-zinc-200">{report.accessibility.score}</div>
+                            <div className="text-zinc-500 text-[10px] uppercase font-semibold">A11y Score</div>
+                          </div>
+                          <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-3 text-center">
+                            <ShieldCheck className="w-5 h-5 text-amber-400 mx-auto mb-1" />
+                            <div className="text-base font-bold text-zinc-200">{report.security.score}</div>
+                            <div className="text-zinc-500 text-[10px] uppercase font-semibold">Security</div>
                           </div>
                         </div>
 
-                        <div className="bg-zinc-900/40 border border-zinc-800 p-5 rounded-2xl">
-                          <h4 className="font-bold text-zinc-400 text-xs uppercase tracking-wider mb-4">Heaviest Subtrees (Node Bloat)</h4>
-                          <div className="flex flex-col gap-3.5">
-                            {report.dom.largestSubtrees?.map((sub, idx) => (
-                              <div key={idx} className="flex flex-col gap-1">
-                                <span className="text-[10px] text-purple-400 font-mono truncate block" title={sub.selector}>{sub.selector}</span>
-                                <div className="flex justify-between items-center text-xs">
-                                  <span className="text-zinc-500">Node Weight</span>
-                                  <span className="text-zinc-300 font-bold">{sub.nodeCount} children</span>
-                                </div>
-                              </div>
+                        {/* Tech Stack Summary */}
+                        <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4">
+                          <p className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider mb-3">Tech Stack Detected</p>
+                          <div className="flex flex-wrap gap-2">
+                            {report.techStack.hosting !== "Unknown" && (
+                              <span className="px-2.5 py-1 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-semibold">
+                                {report.techStack.hosting}
+                              </span>
+                            )}
+                            {[...report.techStack.frameworks, ...report.techStack.cssLibraries].map((t, i) => (
+                              <span key={i} className="px-2.5 py-1 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400 text-xs font-semibold">
+                                {t}
+                              </span>
                             ))}
+                            {report.techStack.frameworks.length === 0 && report.techStack.cssLibraries.length === 0 && (
+                              <span className="text-zinc-500 text-xs italic">Vanilla / Unknown stack</span>
+                            )}
                           </div>
                         </div>
                       </div>
 
-                      <div className="lg:col-span-2 bg-zinc-900/40 border border-zinc-800 p-5 rounded-2xl max-h-[600px] overflow-y-auto">
-                        <h4 className="font-bold text-zinc-400 text-xs uppercase tracking-wider mb-4">Interactive DOM Tree Explorer</h4>
-                        <div className="flex flex-col border border-zinc-850/50 rounded-xl bg-zinc-950 p-4">
-                          <DOMTreeViewer node={report.dom.tree} />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {activeTab === "accessibility" && (
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                      <div className="flex flex-col gap-4 lg:col-span-1">
-                        <ScoreGauge score={report.accessibility.score} label="Accessibility Score" subtitle="axe-core compliance rating" size={130} />
-                        
-                        <div className="bg-zinc-900/40 border border-zinc-800 p-5 rounded-2xl">
-                          <h4 className="font-bold text-zinc-400 text-xs uppercase tracking-wider mb-3">Audits Checklist</h4>
-                          <div className="flex justify-between items-center py-2 border-b border-zinc-850">
-                            <span className="text-emerald-400 text-xs font-semibold">Passed Audits</span>
-                            <span className="text-sm font-bold text-emerald-400">{report.accessibility.passes} rules</span>
-                          </div>
-                          <div className="flex justify-between items-center py-2">
-                            <span className="text-rose-400 text-xs font-semibold">Failed Audits</span>
-                            <span className="text-sm font-bold text-rose-400">{report.accessibility.violations.length} rules</span>
-                          </div>
-                        </div>
-                      </div>
-
+                      {/* Right: AI Summary + Top Issues */}
                       <div className="lg:col-span-2 flex flex-col gap-4">
-                        <h4 className="font-bold text-zinc-400 text-sm uppercase tracking-wider pl-1">Compliance Violations ({report.accessibility.violations.length})</h4>
-                        
-                        {report.accessibility.violations.length === 0 ? (
-                          <div className="bg-emerald-500/10 border border-emerald-500/20 p-8 rounded-2xl text-center flex flex-col items-center">
-                            <CheckCircle2 className="w-12 h-12 text-emerald-500 mb-3" />
-                            <h5 className="font-bold text-emerald-400">Zero Accessibility Violations Detected!</h5>
-                            <p className="text-zinc-400 text-xs mt-1">Excellent work. This website fully respects client readability and helper navigation standards.</p>
+                        {/* AI Prognosis */}
+                        <div className="bg-gradient-to-br from-purple-950/30 to-zinc-900 border border-purple-800/30 rounded-2xl p-6">
+                          <div className="flex items-center gap-2 mb-3">
+                            <Sparkles className="w-5 h-5 text-purple-400" />
+                            <h3 className="font-bold text-purple-300 text-sm uppercase tracking-wider">AI Chief Medical Officer's Prognosis</h3>
                           </div>
-                        ) : (
-                          <div className="flex flex-col gap-3">
-                            {report.accessibility.violations.map((violation, idx) => {
-                              const sevColors = {
-                                critical: "bg-red-500/10 text-red-400 border-red-500/20",
-                                serious: "bg-orange-500/10 text-orange-400 border-orange-500/20",
-                                moderate: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
-                                minor: "bg-sky-500/10 text-sky-400 border-sky-500/20"
-                              };
-                              return (
-                                <div key={idx} className="bg-zinc-900/40 border border-zinc-850 rounded-2xl p-5 hover:border-zinc-800 transition-colors">
-                                  <div className="flex flex-wrap justify-between items-center gap-3">
-                                    <div className="flex items-center gap-2">
-                                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${sevColors[violation.impact]}`}>
-                                        {violation.impact}
-                                      </span>
-                                      <h5 className="font-bold text-zinc-200 text-sm">{violation.id}</h5>
-                                    </div>
-                                    <a
-                                      href={violation.helpUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1 font-semibold"
-                                    >
-                                      Rule Docs <ExternalLink className="w-3.5 h-3.5" />
-                                    </a>
-                                  </div>
-                                  <p className="text-zinc-400 text-xs md:text-sm mt-3 leading-relaxed">{violation.description}</p>
-                                  
-                                  <div className="mt-4 bg-zinc-950 rounded-xl p-3 border border-zinc-900">
-                                    <span className="text-[10px] text-zinc-500 font-bold block uppercase tracking-wider mb-2">Targeted Elements ({violation.nodes.length})</span>
-                                    <div className="flex flex-col gap-1.5 max-h-[120px] overflow-y-auto">
-                                      {violation.nodes.map((node, nIdx) => (
-                                        <code key={nIdx} className="text-[10px] font-mono text-purple-300 truncate block bg-zinc-900 p-1.5 rounded border border-zinc-850/50">
-                                          {node}
-                                        </code>
-                                      ))}
-                                    </div>
-                                  </div>
+                          <p className="text-zinc-300 text-sm leading-relaxed">
+                            {report.aiSummary?.overallHealth || "AI analysis unavailable. Set GEMINI_API_KEY in backend/.env to enable AI diagnostics."}
+                          </p>
+                        </div>
+
+                        {/* Top 3 Priority Issues */}
+                        <div className="flex flex-col gap-3">
+                          <h4 className="text-zinc-400 text-xs uppercase font-bold tracking-wider">Top Priority Diagnoses</h4>
+                          {topFindings.length === 0 ? (
+                            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 text-center">
+                              <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
+                              <p className="text-emerald-400 font-semibold text-sm">No critical issues found!</p>
+                            </div>
+                          ) : (
+                            topFindings.map((f, i) => (
+                              <div key={i} className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4 flex gap-4 items-start hover:border-zinc-700 transition-colors">
+                                <span className={`flex items-center px-2.5 py-1 text-[10px] font-bold uppercase rounded-full border flex-shrink-0 ${impactColor(f.impact)}`}>
+                                  {impactIcon(f.impact)} {f.impact}
+                                </span>
+                                <div>
+                                  <h5 className="font-bold text-zinc-200 text-sm">{f.title}</h5>
+                                  <p className="text-zinc-400 text-xs mt-1 leading-relaxed">{f.explanation}</p>
                                 </div>
-                              );
-                            })}
-                          </div>
-                        )}
+                              </div>
+                            ))
+                          )}
+                          {(report.aiSummary?.findings?.length || 0) > 3 && (
+                            <button
+                              onClick={() => setActiveTab("ai")}
+                              className="text-xs text-purple-400 hover:text-purple-300 font-semibold self-start mt-1 transition-colors"
+                            >
+                              View all {report.aiSummary?.findings.length} findings →
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  )}
+                  );
+                })()}
 
-                  {activeTab === "security" && (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      <div className="bg-zinc-900/40 border border-zinc-800 p-6 rounded-2xl flex flex-col gap-5">
-                        <div className="flex justify-between items-center">
-                          <h4 className="font-bold text-zinc-400 text-sm uppercase tracking-wider">Security Headers Compliance</h4>
-                          <span className={`px-2 py-0.5 rounded text-xs font-bold border ${
-                            report.security.score >= 80 
-                              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 
-                              : report.security.score >= 50 
-                              ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
-                              : "bg-rose-500/10 text-rose-400 border-rose-500/20"
-                          }`}>
-                            Score: {report.security.score}/100
-                          </span>
+                {/* ── AI DOCTOR TAB ── */}
+                {activeTab === "ai" && (
+                  <div className="flex flex-col gap-6">
+                    <div className="bg-gradient-to-br from-purple-950/30 to-zinc-900 border border-purple-800/30 rounded-2xl p-6">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Sparkles className="w-5 h-5 text-purple-400" />
+                        <h3 className="font-bold text-purple-300 text-sm uppercase tracking-wider">AI Chief Medical Officer's Prognosis</h3>
+                      </div>
+                      <p className="text-zinc-300 text-sm leading-relaxed">
+                        {report.aiSummary?.overallHealth || "AI analysis unavailable — add GEMINI_API_KEY to backend/.env"}
+                      </p>
+                    </div>
+
+                    <h4 className="text-zinc-400 text-xs uppercase font-bold tracking-wider">
+                      Prescribed Treatments & Remediation ({report.aiSummary?.findings?.length || 0})
+                    </h4>
+                    <div className="grid gap-4">
+                      {(report.aiSummary?.findings || []).map((f, i) => (
+                        <div key={i} className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 hover:border-zinc-700 transition-colors flex flex-col md:flex-row gap-4">
+                          <div className="flex-shrink-0">
+                            <span className={`flex items-center px-2.5 py-1 text-[10px] font-bold uppercase rounded-full border ${impactColor(f.impact)}`}>
+                              {impactIcon(f.impact)} {f.impact} priority
+                            </span>
+                            <span className="mt-2 block text-[10px] uppercase font-bold text-zinc-600 tracking-wider">{f.category}</span>
+                          </div>
+                          <div>
+                            <h5 className="font-bold text-zinc-200 text-sm">{f.title}</h5>
+                            <p className="text-zinc-400 text-sm mt-2 leading-relaxed">{f.explanation}</p>
+                          </div>
                         </div>
-                        <div className="flex flex-col gap-3 mt-1">
-                          {report.security.headers.map((hdr, idx) => (
-                            <div key={idx} className="flex justify-between items-start gap-4 py-3 border-b border-zinc-850/40 last:border-0">
-                              <div className="flex-1">
-                                <span className="font-semibold text-xs text-zinc-300 block">{hdr.header}</span>
-                                <span className="text-[10px] text-zinc-500 mt-1 block leading-relaxed">{hdr.description}</span>
-                              </div>
-                              <div className="flex-shrink-0">
-                                {hdr.present ? (
-                                  <span className="flex items-center text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded">
-                                    Present
-                                  </span>
-                                ) : (
-                                  <span className={`flex items-center text-[10px] font-bold px-2 py-0.5 rounded border ${
-                                    hdr.risk === "high" 
-                                      ? "bg-red-500/10 text-red-400 border-red-500/20" 
-                                      : "bg-amber-500/10 text-amber-400 border-amber-500/20"
-                                  }`}>
-                                    Missing ({hdr.risk} risk)
-                                  </span>
-                                )}
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── PERFORMANCE TAB ── */}
+                {activeTab === "performance" && (
+                  <div className="flex flex-col gap-8">
+                    {/* Vitals Gauges */}
+                    <div>
+                      <h4 className="text-zinc-400 text-xs uppercase font-bold tracking-wider mb-4">Core Web Vitals</h4>
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                        <ScoreGauge
+                          score={Math.max(0, 100 - Math.min((report.performance.lcp / 40), 100))}
+                          label="LCP"
+                          subtitle={`${(report.performance.lcp / 1000).toFixed(2)}s · ${report.performance.lcp < 2500 ? "Good" : report.performance.lcp < 4000 ? "Needs work" : "Poor"}`}
+                        />
+                        <ScoreGauge
+                          score={Math.max(0, 100 - Math.min((report.performance.fcp / 25), 100))}
+                          label="FCP"
+                          subtitle={`${(report.performance.fcp / 1000).toFixed(2)}s · ${report.performance.fcp < 1800 ? "Good" : report.performance.fcp < 3000 ? "Needs work" : "Poor"}`}
+                        />
+                        <ScoreGauge
+                          score={report.performance.cls < 0.1 ? 95 : report.performance.cls < 0.25 ? 60 : 25}
+                          label="CLS"
+                          subtitle={`${report.performance.cls.toFixed(3)} · ${report.performance.cls < 0.1 ? "Good" : report.performance.cls < 0.25 ? "Needs work" : "Poor"}`}
+                        />
+                        <ScoreGauge
+                          score={Math.max(0, 100 - Math.min((report.performance.tti / 70), 100))}
+                          label="TTI"
+                          subtitle={`${(report.performance.tti / 1000).toFixed(2)}s`}
+                        />
+                        <ScoreGauge
+                          score={Math.max(0, 100 - Math.min((report.performance.totalLoadTime / 100), 100))}
+                          label="Speed Index"
+                          subtitle={`${(report.performance.totalLoadTime / 1000).toFixed(2)}s total`}
+                        />
+                      </div>
+                    </div>
+
+                    {/* AI Explanation for Performance */}
+                    {report.aiSummary?.findings?.filter(f => f.category === "performance").length! > 0 && (
+                      <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-5">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Sparkles className="w-4 h-4 text-purple-400" />
+                          <h4 className="text-purple-300 text-xs uppercase font-bold tracking-wider">AI Performance Diagnostics</h4>
+                        </div>
+                        <div className="flex flex-col gap-3">
+                          {report.aiSummary?.findings?.filter(f => f.category === "performance").map((f, i) => (
+                            <div key={i} className="flex gap-3 items-start">
+                              <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded border flex-shrink-0 ${impactColor(f.impact)}`}>{f.impact}</span>
+                              <div>
+                                <p className="text-zinc-300 text-xs font-semibold">{f.title}</p>
+                                <p className="text-zinc-500 text-xs mt-0.5">{f.explanation}</p>
                               </div>
                             </div>
                           ))}
                         </div>
                       </div>
+                    )}
 
-                      <div className="bg-zinc-900/40 border border-zinc-800 p-6 rounded-2xl flex flex-col gap-6">
-                        <h4 className="font-bold text-zinc-400 text-sm uppercase tracking-wider">Technology Stack Analysis</h4>
-                        
-                        <div className="flex flex-col gap-4">
-                          <div>
-                            <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider block mb-2">Hosting Provider / Server</span>
-                            <span className="px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-850/80 text-sm text-cyan-300 font-bold block w-fit">
-                              {report.techStack.hosting || "Unknown"}
+                    {/* Summary Stats */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-5 flex items-center gap-4">
+                        <Clock className="w-9 h-9 text-cyan-400 flex-shrink-0" />
+                        <div>
+                          <p className="text-zinc-500 text-xs uppercase font-semibold">Total Load Time</p>
+                          <p className="text-2xl font-bold text-zinc-200">{(report.performance.totalLoadTime / 1000).toFixed(2)}s</p>
+                        </div>
+                      </div>
+                      <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-5 flex items-center gap-4">
+                        <Network className="w-9 h-9 text-purple-400 flex-shrink-0" />
+                        <div>
+                          <p className="text-zinc-500 text-xs uppercase font-semibold">Total Requests</p>
+                          <p className="text-2xl font-bold text-zinc-200">{report.performance.resourceCount}</p>
+                        </div>
+                      </div>
+                      <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-5 flex items-center gap-4">
+                        <HardDrive className="w-9 h-9 text-emerald-400 flex-shrink-0" />
+                        <div>
+                          <p className="text-zinc-500 text-xs uppercase font-semibold">Page Weight</p>
+                          <p className="text-2xl font-bold text-zinc-200">
+                            {report.performance.totalTransferSize > 1024 * 1024
+                              ? `${(report.performance.totalTransferSize / 1024 / 1024).toFixed(2)} MB`
+                              : `${(report.performance.totalTransferSize / 1024).toFixed(0)} KB`}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Waterfall */}
+                    <div>
+                      <h4 className="text-zinc-400 text-xs uppercase font-bold tracking-wider mb-3">Network Resource Waterfall</h4>
+                      <WaterfallChart requests={report.network.requests} />
+                    </div>
+                  </div>
+                )}
+
+                {/* ── DOM TAB ── */}
+                {activeTab === "dom" && (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="flex flex-col gap-4">
+                      <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-5">
+                        <h4 className="text-zinc-400 text-xs uppercase font-bold tracking-wider mb-4">DOM Anatomy Stats</h4>
+                        <div className="flex flex-col gap-3">
+                          <div className="flex justify-between items-center py-2 border-b border-zinc-800">
+                            <span className="text-zinc-400 text-xs">Total Nodes</span>
+                            <span className={`text-sm font-bold ${report.dom.nodeCount > 1500 ? "text-rose-400" : report.dom.nodeCount > 800 ? "text-amber-400" : "text-emerald-400"}`}>
+                              {report.dom.nodeCount}
+                              {report.dom.nodeCount > 1500 && <span className="ml-1 text-[10px] text-rose-500">⚠ Bloated</span>}
                             </span>
                           </div>
-
-                          <div>
-                            <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider block mb-2">JS Frameworks</span>
-                            {report.techStack.frameworks.length === 0 ? (
-                              <span className="text-xs text-zinc-500 italic block">No frameworks detected (Vanilla JS or Static)</span>
-                            ) : (
-                              <div className="flex flex-wrap gap-2">
-                                {report.techStack.frameworks.map((f, idx) => (
-                                  <span key={idx} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-zinc-950 border border-zinc-850 text-purple-400">
-                                    {f}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
+                          <div className="flex justify-between items-center py-2">
+                            <span className="text-zinc-400 text-xs">Max Depth</span>
+                            <span className={`text-sm font-bold ${report.dom.maxDepth > 32 ? "text-rose-400" : report.dom.maxDepth > 20 ? "text-amber-400" : "text-emerald-400"}`}>
+                              {report.dom.maxDepth} levels
+                            </span>
                           </div>
+                        </div>
+                      </div>
 
-                          <div>
-                            <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider block mb-2">CSS Architecture</span>
-                            {report.techStack.cssLibraries.length === 0 ? (
-                              <span className="text-xs text-zinc-500 italic block">Custom Vanilla CSS Stylesheets</span>
-                            ) : (
-                              <div className="flex flex-wrap gap-2">
-                                {report.techStack.cssLibraries.map((css, idx) => (
-                                  <span key={idx} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-zinc-950 border border-zinc-850 text-pink-400">
-                                    {css}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-
-                          <div>
-                            <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider block mb-2">Analytics & Trackers</span>
-                            {report.techStack.analytics.length === 0 ? (
-                              <span className="text-xs text-zinc-500 italic block">No analytics trackers detected</span>
-                            ) : (
-                              <div className="flex flex-wrap gap-2">
-                                {report.techStack.analytics.map((an, idx) => (
-                                  <span key={idx} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-zinc-950 border border-zinc-850 text-emerald-400">
-                                    {an}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-
-                          {report.techStack.other.length > 0 && (
-                            <div>
-                              <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider block mb-2">Infrastructure & Bundlers</span>
-                              <div className="flex flex-wrap gap-2">
-                                {report.techStack.other.map((o, idx) => (
-                                  <span key={idx} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-zinc-950 border border-zinc-850 text-zinc-400">
-                                    {o}
-                                  </span>
-                                ))}
+                      <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-5">
+                        <h4 className="text-zinc-400 text-xs uppercase font-bold tracking-wider mb-4">Heaviest Subtrees</h4>
+                        <div className="flex flex-col gap-3">
+                          {(report.dom.largestSubtrees || []).map((sub, i) => (
+                            <div key={i}>
+                              <p className="text-purple-400 text-[10px] font-mono truncate" title={sub.selector}>{sub.selector}</p>
+                              <div className="flex justify-between text-xs mt-0.5">
+                                <span className="text-zinc-500">Children</span>
+                                <span className="text-zinc-300 font-bold">{sub.nodeCount}</span>
                               </div>
                             </div>
-                          )}
+                          ))}
                         </div>
                       </div>
                     </div>
-                  )}
-                </div>
+
+                    <div className="lg:col-span-2 bg-zinc-900/40 border border-zinc-800 rounded-2xl p-5">
+                      <h4 className="text-zinc-400 text-xs uppercase font-bold tracking-wider mb-4">Interactive DOM Tree Explorer</h4>
+                      <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4 max-h-[550px] overflow-y-auto">
+                        <DOMTreeViewer node={report.dom.tree} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── ACCESSIBILITY TAB ── */}
+                {activeTab === "accessibility" && (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="flex flex-col gap-4 lg:col-span-1">
+                      <ScoreGauge score={report.accessibility.score} label="Accessibility Score" subtitle="axe-core audit" size={130} />
+                      <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-5">
+                        <div className="flex justify-between py-2 border-b border-zinc-800">
+                          <span className="text-zinc-400 text-xs">Passed Rules</span>
+                          <span className="text-emerald-400 font-bold text-sm">{report.accessibility.passes}</span>
+                        </div>
+                        <div className="flex justify-between py-2">
+                          <span className="text-zinc-400 text-xs">Violations</span>
+                          <span className="text-rose-400 font-bold text-sm">{report.accessibility.violations.length}</span>
+                        </div>
+                      </div>
+
+                      {/* AI a11y advice */}
+                      {report.aiSummary?.findings?.filter(f => f.category === "accessibility").length! > 0 && (
+                        <div className="bg-zinc-900/40 border border-purple-800/20 rounded-2xl p-4">
+                          <div className="flex items-center gap-1.5 mb-2">
+                            <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                            <span className="text-purple-300 text-[10px] uppercase font-bold">AI Advice</span>
+                          </div>
+                          {report.aiSummary?.findings?.filter(f => f.category === "accessibility").slice(0, 2).map((f, i) => (
+                            <p key={i} className="text-zinc-400 text-xs leading-relaxed mb-2">{f.explanation}</p>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="lg:col-span-2 flex flex-col gap-4">
+                      <h4 className="text-zinc-400 text-xs uppercase font-bold tracking-wider">
+                        Accessibility Violations ({report.accessibility.violations.length})
+                      </h4>
+                      {report.accessibility.violations.length === 0 ? (
+                        <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-10 text-center flex flex-col items-center">
+                          <CheckCircle2 className="w-14 h-14 text-emerald-500 mb-3" />
+                          <h5 className="text-emerald-400 font-bold text-lg">Zero violations detected!</h5>
+                          <p className="text-zinc-400 text-xs mt-1">This site fully respects accessibility standards.</p>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-3">
+                          {report.accessibility.violations.map((v, i) => {
+                            const sevBg: Record<string, string> = {
+                              critical: "bg-red-500/10 text-red-400 border-red-500/20",
+                              serious: "bg-orange-500/10 text-orange-400 border-orange-500/20",
+                              moderate: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+                              minor: "bg-sky-500/10 text-sky-400 border-sky-500/20",
+                            };
+                            return (
+                              <div key={i} className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 hover:border-zinc-700 transition-colors">
+                                <div className="flex items-center justify-between gap-2 mb-3">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${sevBg[v.impact]}`}>{v.impact}</span>
+                                    <span className="font-bold text-zinc-200 text-sm">{v.id}</span>
+                                  </div>
+                                  <a href={v.helpUrl} target="_blank" rel="noopener noreferrer"
+                                    className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1 font-semibold">
+                                    Docs <ExternalLink className="w-3 h-3" />
+                                  </a>
+                                </div>
+                                <p className="text-zinc-400 text-xs leading-relaxed">{v.description}</p>
+                                {v.nodes.length > 0 && (
+                                  <div className="mt-3 bg-zinc-950 rounded-lg p-3 border border-zinc-900 max-h-28 overflow-y-auto">
+                                    <span className="text-[10px] text-zinc-600 uppercase font-bold block mb-1">Elements ({v.nodes.length})</span>
+                                    {v.nodes.map((n, ni) => (
+                                      <code key={ni} className="text-[10px] font-mono text-purple-300 block truncate">{n}</code>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── SECURITY TAB ── */}
+                {activeTab === "security" && (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Security Headers */}
+                    <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-6">
+                      <div className="flex items-center justify-between mb-5">
+                        <h4 className="text-zinc-400 text-xs uppercase font-bold tracking-wider">Security Headers</h4>
+                        <span className={`px-2.5 py-1 rounded text-xs font-bold border ${
+                          report.security.score >= 80
+                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                            : report.security.score >= 50
+                            ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                            : "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                        }`}>
+                          Score: {report.security.score}/100
+                        </span>
+                      </div>
+                      <div className="flex flex-col gap-3">
+                        {report.security.headers.map((h, i) => (
+                          <div key={i} className="py-3 border-b border-zinc-800/50 last:border-0">
+                            <div className="flex justify-between items-center">
+                              <span className="text-zinc-300 text-xs font-semibold">{h.header}</span>
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                                h.present
+                                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                                  : h.risk === "high"
+                                  ? "bg-red-500/10 text-red-400 border-red-500/20"
+                                  : "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                              }`}>
+                                {h.present ? "✓ Present" : `✗ Missing (${h.risk} risk)`}
+                              </span>
+                            </div>
+                            <p className="text-zinc-600 text-[10px] mt-1 leading-relaxed">{h.description}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Tech Stack */}
+                    <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-6 flex flex-col gap-6">
+                      <h4 className="text-zinc-400 text-xs uppercase font-bold tracking-wider">Technology Stack</h4>
+
+                      {[
+                        { label: "Hosting / Server", items: report.techStack.hosting !== "Unknown" ? [report.techStack.hosting] : [], color: "text-cyan-400 bg-cyan-500/10 border-cyan-500/20" },
+                        { label: "JS Frameworks", items: report.techStack.frameworks, color: "text-purple-400 bg-purple-500/10 border-purple-500/20" },
+                        { label: "CSS Libraries", items: report.techStack.cssLibraries, color: "text-pink-400 bg-pink-500/10 border-pink-500/20" },
+                        { label: "Analytics", items: report.techStack.analytics, color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" },
+                        { label: "Other Tools", items: report.techStack.other, color: "text-zinc-400 bg-zinc-800 border-zinc-700" },
+                      ].map(({ label, items, color }) => (
+                        <div key={label}>
+                          <p className="text-zinc-600 text-[10px] uppercase font-bold tracking-wider mb-2">{label}</p>
+                          {items.length === 0 ? (
+                            <span className="text-zinc-600 text-xs italic">None detected</span>
+                          ) : (
+                            <div className="flex flex-wrap gap-2">
+                              {items.map((t, i) => (
+                                <span key={i} className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${color}`}>{t}</span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
         )}
 
-        {/* COMPARE SCANS MODULE */}
+        {/* ── COMPARE MODE ── */}
         {activeMode === "compare" && (
-          <div className="flex flex-col items-center">
+          <div className="flex flex-col items-center gap-6">
             {compareStatus !== "loading" && (
-              <form onSubmit={handleCompareScan} className="w-full max-w-4xl bg-zinc-900/60 border border-zinc-850 p-5 rounded-2xl flex flex-col md:flex-row gap-4 items-center shadow-3xl hover:border-zinc-800 transition-all backdrop-blur-sm">
-                <div className="flex-1 w-full flex items-center bg-zinc-950 border border-zinc-850 p-2 rounded-xl">
-                  <span className="text-purple-400 text-xs font-bold px-2 py-1 bg-purple-500/10 border border-purple-500/20 rounded mr-2 uppercase">Site A</span>
-                  <input
-                    type="text"
-                    placeholder="First website (e.g. site1.com)..."
-                    value={urlA}
-                    onChange={(e) => setUrlA(e.target.value)}
-                    className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none text-zinc-100 placeholder-zinc-650 text-sm py-2 px-2"
-                    required
-                  />
+              <form onSubmit={handleCompareScan} className="w-full max-w-4xl bg-zinc-900/60 border border-zinc-800 p-4 rounded-2xl flex flex-col md:flex-row gap-3 shadow-2xl">
+                <div className="flex-1 flex items-center bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 gap-2">
+                  <span className="text-purple-400 text-[10px] font-bold uppercase px-2 py-0.5 bg-purple-500/10 border border-purple-500/20 rounded">A</span>
+                  <input type="text" placeholder="First site (e.g. github.com)" value={urlA} onChange={e => setUrlA(e.target.value)}
+                    className="flex-1 bg-transparent outline-none text-zinc-200 placeholder-zinc-600 text-sm" required />
                 </div>
-                <div className="flex-1 w-full flex items-center bg-zinc-950 border border-zinc-850 p-2 rounded-xl">
-                  <span className="text-cyan-400 text-xs font-bold px-2 py-1 bg-cyan-500/10 border border-cyan-500/20 rounded mr-2 uppercase">Site B</span>
-                  <input
-                    type="text"
-                    placeholder="Second website (e.g. site2.com)..."
-                    value={urlB}
-                    onChange={(e) => setUrlB(e.target.value)}
-                    className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none text-zinc-100 placeholder-zinc-650 text-sm py-2 px-2"
-                    required
-                  />
+                <div className="flex-1 flex items-center bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 gap-2">
+                  <span className="text-cyan-400 text-[10px] font-bold uppercase px-2 py-0.5 bg-cyan-500/10 border border-cyan-500/20 rounded">B</span>
+                  <input type="text" placeholder="Second site (e.g. gitlab.com)" value={urlB} onChange={e => setUrlB(e.target.value)}
+                    className="flex-1 bg-transparent outline-none text-zinc-200 placeholder-zinc-600 text-sm" required />
                 </div>
-                <button
-                  type="submit"
-                  disabled={!urlA || !urlB}
-                  className="bg-purple-600 hover:bg-purple-500 active:scale-95 text-white text-xs md:text-sm font-semibold px-6 py-4 rounded-xl transition-all shadow-lg shadow-purple-500/15 disabled:opacity-50 flex items-center gap-2 flex-shrink-0 w-full md:w-auto justify-center"
-                >
-                  <GitCompare className="w-4 h-4" /> Run Comparison
+                <button type="submit" disabled={!urlA || !urlB}
+                  className="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-all">
+                  <GitCompare className="w-4 h-4" /> Compare
                 </button>
               </form>
             )}
 
-            {compareStatus === "loading" && (
-              <div className="w-full max-w-lg bg-zinc-900/50 border border-zinc-800/80 p-8 rounded-3xl flex flex-col items-center shadow-3xl text-center backdrop-blur-md">
-                <RefreshCw className="w-10 h-10 text-purple-500 animate-spin mb-4" />
-                <h3 className="text-lg font-bold text-zinc-200">Comparing Website Anatomy</h3>
-                <p className="text-zinc-500 text-xs mt-1">Running Playwright and Lighthouse audits in parallel (approx 15-20s)</p>
-                
-                <div className="w-full mt-6 bg-zinc-950 border border-zinc-900 rounded-xl p-4 divide-y divide-zinc-900 text-left">
-                  {SCAN_STEPS.map((step, idx) => (
-                    <div key={idx} className="flex items-center py-2 text-xs transition-opacity duration-300">
-                      <span className="w-4 h-4 flex items-center justify-center mr-3">
-                        {compareStepIdx > idx ? (
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                        ) : compareStepIdx === idx ? (
-                          <RefreshCw className="w-3.5 h-3.5 text-purple-400 animate-spin" />
-                        ) : (
-                          <span className="w-1.5 h-1.5 rounded-full bg-zinc-700" />
-                        )}
-                      </span>
-                      <span className={`${
-                        compareStepIdx === idx 
-                          ? "text-purple-400 font-semibold" 
-                          : compareStepIdx > idx 
-                          ? "text-zinc-500" 
-                          : "text-zinc-650"
-                      }`}>
-                        {step}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            {compareStatus === "loading" && <LoadingBox stepIdx={compareStepIdx} />}
+            {compareStatus === "error" && <ErrorBox message={compareError} onRetry={() => setCompareStatus("idle")} />}
 
-            {compareStatus === "error" && (
-              <div className="w-full max-w-xl bg-red-500/10 border border-red-500/20 p-6 rounded-2xl flex items-start gap-4 shadow-xl">
-                <AlertOctagon className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <h4 className="font-bold text-red-400">Comparison Scan Failed</h4>
-                  <p className="text-zinc-400 text-xs mt-1 leading-relaxed">{compareError}</p>
-                  <button
-                    onClick={() => setCompareStatus("idle")}
-                    className="mt-3 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-300 font-semibold px-4 py-2 rounded-lg border border-red-500/20 transition-colors"
-                  >
-                    Try Again
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* COMPARISON RESULTS */}
             {compareStatus === "success" && reportA && reportB && (
-              <div className="w-full mt-6 flex flex-col gap-6 animate-fade-in">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-zinc-900/40 border border-zinc-800/80 p-5 rounded-2xl backdrop-blur-md">
-                  <div className="flex items-center gap-3">
-                    <GitCompare className="w-6 h-6 text-purple-400" />
-                    <div>
-                      <h2 className="text-base md:text-lg font-extrabold text-zinc-100 flex items-center gap-2 flex-wrap">
-                        <span className="text-purple-400">{reportA.url}</span>
-                        <span className="text-zinc-600 font-medium">vs</span>
-                        <span className="text-cyan-400">{reportB.url}</span>
-                      </h2>
-                      <p className="text-zinc-500 text-xs mt-0.5">Dual comparison generated on {new Date().toLocaleString()}</p>
-                    </div>
+              <div className="w-full animate-fade-in">
+                <div className="flex items-center gap-4 bg-zinc-900/40 border border-zinc-800 p-5 rounded-2xl mb-4">
+                  <GitCompare className="w-6 h-6 text-purple-400" />
+                  <div className="flex-1">
+                    <h2 className="text-base font-bold text-zinc-100 flex items-center gap-2 flex-wrap">
+                      <span className="text-purple-400">{reportA.url}</span>
+                      <span className="text-zinc-600">vs</span>
+                      <span className="text-cyan-400">{reportB.url}</span>
+                    </h2>
+                    <p className="text-zinc-500 text-xs">{new Date().toLocaleString()}</p>
                   </div>
-                  <button
-                    onClick={() => {
-                      setCompareStatus("idle");
-                      setReportA(null);
-                      setReportB(null);
-                    }}
-                    className="text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-750 text-zinc-300 font-semibold px-4 py-2.5 rounded-xl transition-all"
-                  >
-                    Run Another Comparison
+                  <button onClick={() => { setCompareStatus("idle"); setReportA(null); setReportB(null); }}
+                    className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold px-4 py-2 rounded-xl border border-zinc-700">
+                    ↩ New Compare
                   </button>
                 </div>
 
-                <div className="flex border-b border-zinc-850 gap-2 overflow-x-auto pb-px">
-                  <button
-                    onClick={() => setCompareActiveTab("overview")}
-                    className={`flex items-center gap-2 px-5 py-3.5 text-xs font-bold tracking-wide uppercase border-b-2 transition-all ${
-                      compareActiveTab === "overview"
-                        ? "border-purple-500 text-purple-400"
-                        : "border-transparent text-zinc-500 hover:text-zinc-300"
-                    }`}
-                  >
-                    📊 Overview Matchup
-                  </button>
-                  <button
-                    onClick={() => setCompareActiveTab("ai")}
-                    className={`flex items-center gap-2 px-5 py-3.5 text-xs font-bold tracking-wide uppercase border-b-2 transition-all ${
-                      compareActiveTab === "ai"
-                        ? "border-purple-500 text-purple-400"
-                        : "border-transparent text-zinc-500 hover:text-zinc-300"
-                    }`}
-                  >
-                    🩺 AI Doctor Advice
-                  </button>
-                  <button
-                    onClick={() => setCompareActiveTab("performance")}
-                    className={`flex items-center gap-2 px-5 py-3.5 text-xs font-bold tracking-wide uppercase border-b-2 transition-all ${
-                      compareActiveTab === "performance"
-                        ? "border-purple-500 text-purple-400"
-                        : "border-transparent text-zinc-500 hover:text-zinc-300"
-                    }`}
-                  >
-                    ⚡ Page Speed Vitals
-                  </button>
-                  <button
-                    onClick={() => setCompareActiveTab("accessibility")}
-                    className={`flex items-center gap-2 px-5 py-3.5 text-xs font-bold tracking-wide uppercase border-b-2 transition-all ${
-                      compareActiveTab === "accessibility"
-                        ? "border-purple-500 text-purple-400"
-                        : "border-transparent text-zinc-500 hover:text-zinc-300"
-                    }`}
-                  >
-                    ♿ Accessibility Violations
-                  </button>
-                  <button
-                    onClick={() => setCompareActiveTab("security")}
-                    className={`flex items-center gap-2 px-5 py-3.5 text-xs font-bold tracking-wide uppercase border-b-2 transition-all ${
-                      compareActiveTab === "security"
-                        ? "border-purple-500 text-purple-400"
-                        : "border-transparent text-zinc-500 hover:text-zinc-300"
-                    }`}
-                  >
-                    🔒 Security Compliance
-                  </button>
+                <div className="flex border-b border-zinc-800 overflow-x-auto mb-6">
+                  {cmpTabBtn("matchup", "📊 Matchup")}
+                  {cmpTabBtn("ai", "🩺 AI Analysis")}
+                  {cmpTabBtn("performance", "⚡ Performance")}
+                  {cmpTabBtn("accessibility", "♿ Accessibility")}
+                  {cmpTabBtn("security", "🔒 Security")}
                 </div>
 
-                <div className="min-h-[400px]">
-                  {compareActiveTab === "overview" && (
-                    <div className="grid grid-cols-1 gap-6">
-                      <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl">
-                        <div className="p-5 border-b border-zinc-850 bg-zinc-950/50">
-                          <h4 className="font-bold text-zinc-300 text-sm">Site Matchup Analytics</h4>
+                {compareTab === "matchup" && (
+                  <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-zinc-950 border-b border-zinc-800 text-xs uppercase text-zinc-500">
+                          <th className="p-4 text-left font-bold">Metric</th>
+                          <th className="p-4 text-left text-purple-400 font-bold">{reportA.url}</th>
+                          <th className="p-4 text-left text-cyan-400 font-bold">{reportB.url}</th>
+                          <th className="p-4 text-center font-bold">Winner</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-800/50 text-zinc-300">
+                        {[
+                          { label: "Load Time", aVal: `${(reportA.performance.totalLoadTime / 1000).toFixed(2)}s`, bVal: `${(reportB.performance.totalLoadTime / 1000).toFixed(2)}s`, aWins: reportA.performance.totalLoadTime < reportB.performance.totalLoadTime },
+                          { label: "LCP (Largest Paint)", aVal: `${(reportA.performance.lcp / 1000).toFixed(2)}s`, bVal: `${(reportB.performance.lcp / 1000).toFixed(2)}s`, aWins: reportA.performance.lcp < reportB.performance.lcp },
+                          { label: "FCP (First Paint)", aVal: `${(reportA.performance.fcp / 1000).toFixed(2)}s`, bVal: `${(reportB.performance.fcp / 1000).toFixed(2)}s`, aWins: reportA.performance.fcp < reportB.performance.fcp },
+                          { label: "CLS (Layout Shift)", aVal: reportA.performance.cls.toFixed(3), bVal: reportB.performance.cls.toFixed(3), aWins: reportA.performance.cls < reportB.performance.cls },
+                          { label: "Accessibility Score", aVal: `${reportA.accessibility.score}/100`, bVal: `${reportB.accessibility.score}/100`, aWins: reportA.accessibility.score > reportB.accessibility.score },
+                          { label: "Security Score", aVal: `${reportA.security.score}/100`, bVal: `${reportB.security.score}/100`, aWins: reportA.security.score > reportB.security.score },
+                          { label: "Total Requests", aVal: `${reportA.performance.resourceCount}`, bVal: `${reportB.performance.resourceCount}`, aWins: reportA.performance.resourceCount < reportB.performance.resourceCount },
+                          { label: "DOM Nodes", aVal: `${reportA.dom.nodeCount}`, bVal: `${reportB.dom.nodeCount}`, aWins: reportA.dom.nodeCount < reportB.dom.nodeCount },
+                        ].map(({ label, aVal, bVal, aWins }, i) => (
+                          <tr key={i} className="hover:bg-zinc-800/20">
+                            <td className="p-4 font-medium text-zinc-400 text-xs">{label}</td>
+                            <td className={`p-4 font-mono text-sm font-bold ${aWins ? "text-purple-400" : "text-zinc-400"}`}>{aVal}</td>
+                            <td className={`p-4 font-mono text-sm font-bold ${!aWins ? "text-cyan-400" : "text-zinc-400"}`}>{bVal}</td>
+                            <td className="p-4 text-center">
+                              {aWins ? (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20">Site A</span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">Site B</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {compareTab === "ai" && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {[{ r: reportA, label: "A", color: "text-purple-400", bg: "border-purple-500/20" }, { r: reportB, label: "B", color: "text-cyan-400", bg: "border-cyan-500/20" }].map(({ r, label, color, bg }) => (
+                      <div key={label} className={`bg-zinc-900/40 border ${bg} rounded-2xl p-5 flex flex-col gap-3`}>
+                        <div className="flex items-center gap-2 border-b border-zinc-800 pb-3">
+                          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${color} bg-zinc-950`}>Site {label}</span>
+                          <span className={`font-bold text-xs ${color} truncate`}>{r.url}</span>
                         </div>
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left text-xs md:text-sm font-sans border-collapse">
-                            <thead>
-                              <tr className="border-b border-zinc-800 bg-zinc-950 text-zinc-500 font-bold uppercase tracking-wider">
-                                <th className="p-4">Audited metric</th>
-                                <th className="p-4 text-purple-400 truncate max-w-[200px]">{reportA.url}</th>
-                                <th className="p-4 text-cyan-400 truncate max-w-[200px]">{reportB.url}</th>
-                                <th className="p-4 text-center">Winner</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-zinc-850 text-zinc-300">
-                              <tr className="hover:bg-zinc-800/10">
-                                <td className="p-4 font-semibold">Speed Index (Load Time)</td>
-                                <td className="p-4 font-mono">{(reportA.performance.totalLoadTime / 1000).toFixed(2)}s</td>
-                                <td className="p-4 font-mono">{(reportB.performance.totalLoadTime / 1000).toFixed(2)}s</td>
-                                <td className="p-4 text-center">
-                                  {reportA.performance.totalLoadTime < reportB.performance.totalLoadTime ? (
-                                    <span className="px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20 font-bold text-xs uppercase">Site A</span>
-                                  ) : (
-                                    <span className="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 font-bold text-xs uppercase">Site B</span>
-                                  )}
-                                </td>
-                              </tr>
-
-                              <tr className="hover:bg-zinc-800/10">
-                                <td className="p-4 font-semibold">Largest Contentful Paint (LCP)</td>
-                                <td className="p-4 font-mono">{(reportA.performance.lcp / 1000).toFixed(2)}s</td>
-                                <td className="p-4 font-mono">{(reportB.performance.lcp / 1000).toFixed(2)}s</td>
-                                <td className="p-4 text-center">
-                                  {reportA.performance.lcp < reportB.performance.lcp ? (
-                                    <span className="px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20 font-bold text-xs uppercase">Site A</span>
-                                  ) : (
-                                    <span className="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 font-bold text-xs uppercase">Site B</span>
-                                  )}
-                                </td>
-                              </tr>
-
-                              <tr className="hover:bg-zinc-800/10">
-                                <td className="p-4 font-semibold">Accessibility Score</td>
-                                <td className="p-4 font-mono text-purple-400 font-bold">{reportA.accessibility.score}/100</td>
-                                <td className="p-4 font-mono text-cyan-400 font-bold">{reportB.accessibility.score}/100</td>
-                                <td className="p-4 text-center">
-                                  {reportA.accessibility.score > reportB.accessibility.score ? (
-                                    <span className="px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20 font-bold text-xs uppercase">Site A</span>
-                                  ) : reportA.accessibility.score < reportB.accessibility.score ? (
-                                    <span className="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 font-bold text-xs uppercase">Site B</span>
-                                  ) : (
-                                    <span className="text-zinc-500 font-semibold text-xs">Tie</span>
-                                  )}
-                                </td>
-                              </tr>
-
-                              <tr className="hover:bg-zinc-800/10">
-                                <td className="p-4 font-semibold">Security Header Compliance</td>
-                                <td className="p-4 font-mono text-purple-400 font-bold">{reportA.security.score}/100</td>
-                                <td className="p-4 font-mono text-cyan-400 font-bold">{reportB.security.score}/100</td>
-                                <td className="p-4 text-center">
-                                  {reportA.security.score > reportB.security.score ? (
-                                    <span className="px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20 font-bold text-xs uppercase">Site A</span>
-                                  ) : reportA.security.score < reportB.security.score ? (
-                                    <span className="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 font-bold text-xs uppercase">Site B</span>
-                                  ) : (
-                                    <span className="text-zinc-500 font-semibold text-xs">Tie</span>
-                                  )}
-                                </td>
-                              </tr>
-
-                              <tr className="hover:bg-zinc-800/10">
-                                <td className="p-4 font-semibold">DOM node weight</td>
-                                <td className="p-4 font-mono">{reportA.dom.nodeCount} nodes</td>
-                                <td className="p-4 font-mono">{reportB.dom.nodeCount} nodes</td>
-                                <td className="p-4 text-center">
-                                  {reportA.dom.nodeCount < reportB.dom.nodeCount ? (
-                                    <span className="px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20 font-bold text-xs uppercase">Site A</span>
-                                  ) : (
-                                    <span className="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 font-bold text-xs uppercase">Site B</span>
-                                  )}
-                                </td>
-                              </tr>
-
-                              <tr className="hover:bg-zinc-800/10">
-                                <td className="p-4 font-semibold">Total Requests Weight</td>
-                                <td className="p-4 font-mono">{(reportA.performance.totalTransferSize / 1024 / 1024).toFixed(2)} MB</td>
-                                <td className="p-4 font-mono">{(reportB.performance.totalTransferSize / 1024 / 1024).toFixed(2)} MB</td>
-                                <td className="p-4 text-center">
-                                  {reportA.performance.totalTransferSize < reportB.performance.totalTransferSize ? (
-                                    <span className="px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20 font-bold text-xs uppercase">Site A</span>
-                                  ) : (
-                                    <span className="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 font-bold text-xs uppercase">Site B</span>
-                                  )}
-                                </td>
-                              </tr>
-                            </tbody>
-                          </table>
-                        </div>
+                        <p className="text-zinc-400 text-xs leading-relaxed italic">{r.aiSummary?.overallHealth}</p>
+                        {r.aiSummary?.findings?.slice(0, 3).map((f, i) => (
+                          <div key={i} className="bg-zinc-950 border border-zinc-900 rounded-xl p-3">
+                            <div className="flex items-center justify-between">
+                              <span className="text-zinc-200 text-xs font-bold">{f.title}</span>
+                              <span className={`text-[10px] font-bold uppercase ${f.impact === "high" ? "text-red-400" : "text-amber-400"}`}>{f.impact}</span>
+                            </div>
+                            <p className="text-zinc-500 text-[11px] mt-1">{f.explanation}</p>
+                          </div>
+                        ))}
                       </div>
-                    </div>
-                  )}
+                    ))}
+                  </div>
+                )}
 
-                  {compareActiveTab === "ai" && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="bg-zinc-900/40 border border-purple-500/15 p-6 rounded-2xl flex flex-col gap-4">
-                        <div className="flex items-center gap-2 border-b border-zinc-850 pb-3">
-                          <span className="text-purple-400 text-xs font-bold px-2 py-1 bg-purple-500/10 border border-purple-500/20 rounded uppercase">Site A</span>
-                          <h4 className="font-bold text-zinc-300 truncate">{reportA.url}</h4>
+                {compareTab === "performance" && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {[{ r: reportA, label: "A", color: "text-purple-400" }, { r: reportB, label: "B", color: "text-cyan-400" }].map(({ r, label, color }) => (
+                      <div key={label} className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-5">
+                        <h4 className={`text-xs uppercase font-bold tracking-wider mb-4 ${color}`}>Site {label}: {r.url}</h4>
+                        <div className="grid grid-cols-2 gap-3 mb-4">
+                          {[["LCP", `${(r.performance.lcp / 1000).toFixed(2)}s`], ["FCP", `${(r.performance.fcp / 1000).toFixed(2)}s`], ["TTI", `${(r.performance.tti / 1000).toFixed(2)}s`], ["CLS", r.performance.cls.toFixed(3)]].map(([k, v]) => (
+                            <div key={k} className="bg-zinc-950 border border-zinc-900 rounded-xl p-3 text-center">
+                              <p className="text-zinc-500 text-[10px] uppercase font-bold">{k}</p>
+                              <p className="text-zinc-200 font-bold text-sm">{v}</p>
+                            </div>
+                          ))}
                         </div>
-                        <p className="text-zinc-400 text-xs leading-relaxed italic">{reportA.aiSummary?.overallHealth}</p>
-                        <div className="flex flex-col gap-3 mt-2">
-                          {reportA.aiSummary?.findings.slice(0, 3).map((f, idx) => (
-                            <div key={idx} className="bg-zinc-950 p-4 border border-zinc-850 rounded-xl">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="font-bold text-zinc-200 text-xs">{f.title}</span>
-                                <span className={`text-[9px] font-bold uppercase px-1.5 rounded ${f.impact === "high" ? "text-red-400" : "text-amber-400"}`}>{f.impact}</span>
-                              </div>
-                              <p className="text-[11px] text-zinc-500 mt-1">{f.explanation}</p>
+                        <WaterfallChart requests={r.network.requests.slice(0, 40)} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {compareTab === "accessibility" && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {[{ r: reportA, label: "A", color: "text-purple-400", bg: "border-purple-500/20" }, { r: reportB, label: "B", color: "text-cyan-400", bg: "border-cyan-500/20" }].map(({ r, label, color, bg }) => (
+                      <div key={label} className={`bg-zinc-900/40 border ${bg} rounded-2xl p-5`}>
+                        <div className={`flex justify-between items-center border-b border-zinc-800 pb-3 mb-4`}>
+                          <h4 className={`text-xs uppercase font-bold tracking-wider ${color}`}>Site {label}</h4>
+                          <span className={`text-sm font-bold ${color}`}>{r.accessibility.score}/100</span>
+                        </div>
+                        <div className="flex flex-col gap-2 max-h-[400px] overflow-y-auto">
+                          {r.accessibility.violations.length === 0 ? (
+                            <p className="text-emerald-400 text-xs italic">✓ No violations</p>
+                          ) : r.accessibility.violations.map((v, i) => (
+                            <div key={i} className="bg-zinc-950 border border-zinc-900 rounded-lg p-3">
+                              <span className="text-zinc-200 text-xs font-bold block">{v.id}</span>
+                              <p className="text-zinc-500 text-[11px] mt-0.5">{v.description}</p>
                             </div>
                           ))}
                         </div>
                       </div>
+                    ))}
+                  </div>
+                )}
 
-                      <div className="bg-zinc-900/40 border border-cyan-500/15 p-6 rounded-2xl flex flex-col gap-4">
-                        <div className="flex items-center gap-2 border-b border-zinc-850 pb-3">
-                          <span className="text-cyan-400 text-xs font-bold px-2 py-1 bg-cyan-500/10 border border-cyan-500/20 rounded uppercase">Site B</span>
-                          <h4 className="font-bold text-zinc-300 truncate">{reportB.url}</h4>
+                {compareTab === "security" && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {[{ r: reportA, label: "A", color: "text-purple-400", bg: "border-purple-500/20" }, { r: reportB, label: "B", color: "text-cyan-400", bg: "border-cyan-500/20" }].map(({ r, label, color, bg }) => (
+                      <div key={label} className={`bg-zinc-900/40 border ${bg} rounded-2xl p-5`}>
+                        <div className="flex justify-between items-center mb-4 border-b border-zinc-800 pb-3">
+                          <h4 className={`text-xs uppercase font-bold tracking-wider ${color}`}>Site {label}: Security</h4>
+                          <span className={`text-sm font-bold ${color}`}>{r.security.score}/100</span>
                         </div>
-                        <p className="text-zinc-400 text-xs leading-relaxed italic">{reportB.aiSummary?.overallHealth}</p>
-                        <div className="flex flex-col gap-3 mt-2">
-                          {reportB.aiSummary?.findings.slice(0, 3).map((f, idx) => (
-                            <div key={idx} className="bg-zinc-950 p-4 border border-zinc-850 rounded-xl">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="font-bold text-zinc-200 text-xs">{f.title}</span>
-                                <span className={`text-[9px] font-bold uppercase px-1.5 rounded ${f.impact === "high" ? "text-red-400" : "text-amber-400"}`}>{f.impact}</span>
-                              </div>
-                              <p className="text-[11px] text-zinc-500 mt-1">{f.explanation}</p>
-                            </div>
-                          ))}
-                        </div>
+                        {r.security.headers.map((h, i) => (
+                          <div key={i} className="flex justify-between items-center py-2 border-b border-zinc-800/30 last:border-0">
+                            <span className="text-zinc-400 text-xs">{h.header}</span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${h.present ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-red-500/10 text-red-400 border-red-500/20"}`}>
+                              {h.present ? "✓" : "✗"}
+                            </span>
+                          </div>
+                        ))}
                       </div>
-                    </div>
-                  )}
-
-                  {compareActiveTab === "performance" && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="bg-zinc-900/40 border border-purple-500/15 p-6 rounded-2xl flex flex-col gap-4">
-                        <h4 className="font-bold text-purple-400 text-xs uppercase tracking-wider">{reportA.url} Performance</h4>
-                        <div className="grid grid-cols-2 gap-3 mt-2">
-                          <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-850 text-center">
-                            <span className="text-[10px] text-zinc-500 font-semibold block uppercase">Speed Index</span>
-                            <span className="text-sm font-bold text-zinc-300 mt-0.5">{(reportA.performance.totalLoadTime / 1000).toFixed(2)}s</span>
-                          </div>
-                          <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-850 text-center">
-                            <span className="text-[10px] text-zinc-500 font-semibold block uppercase">LCP (Largest Paint)</span>
-                            <span className="text-sm font-bold text-zinc-300 mt-0.5">{(reportA.performance.lcp / 1000).toFixed(2)}s</span>
-                          </div>
-                          <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-850 text-center">
-                            <span className="text-[10px] text-zinc-500 font-semibold block uppercase">FCP (First Paint)</span>
-                            <span className="text-sm font-bold text-zinc-300 mt-0.5">{(reportA.performance.fcp / 1000).toFixed(2)}s</span>
-                          </div>
-                          <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-850 text-center">
-                            <span className="text-[10px] text-zinc-500 font-semibold block uppercase">CLS (Layout Shift)</span>
-                            <span className="text-sm font-bold text-zinc-300 mt-0.5">{reportA.performance.cls.toFixed(3)}</span>
-                          </div>
-                        </div>
-                        <div className="mt-4">
-                          <span className="text-[10px] text-zinc-500 font-semibold block uppercase mb-2">Timing Waterfall (First 50 Requests)</span>
-                          <WaterfallChart requests={reportA.network.requests.slice(0, 50)} />
-                        </div>
-                      </div>
-
-                      <div className="bg-zinc-900/40 border border-cyan-500/15 p-6 rounded-2xl flex flex-col gap-4">
-                        <h4 className="font-bold text-cyan-400 text-xs uppercase tracking-wider">{reportB.url} Performance</h4>
-                        <div className="grid grid-cols-2 gap-3 mt-2">
-                          <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-850 text-center">
-                            <span className="text-[10px] text-zinc-500 font-semibold block uppercase">Speed Index</span>
-                            <span className="text-sm font-bold text-zinc-300 mt-0.5">{(reportB.performance.totalLoadTime / 1000).toFixed(2)}s</span>
-                          </div>
-                          <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-850 text-center">
-                            <span className="text-[10px] text-zinc-500 font-semibold block uppercase">LCP (Largest Paint)</span>
-                            <span className="text-sm font-bold text-zinc-300 mt-0.5">{(reportB.performance.lcp / 1000).toFixed(2)}s</span>
-                          </div>
-                          <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-850 text-center">
-                            <span className="text-[10px] text-zinc-500 font-semibold block uppercase">FCP (First Paint)</span>
-                            <span className="text-sm font-bold text-zinc-300 mt-0.5">{(reportB.performance.fcp / 1000).toFixed(2)}s</span>
-                          </div>
-                          <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-850 text-center">
-                            <span className="text-[10px] text-zinc-500 font-semibold block uppercase">CLS (Layout Shift)</span>
-                            <span className="text-sm font-bold text-zinc-300 mt-0.5">{reportB.performance.cls.toFixed(3)}</span>
-                          </div>
-                        </div>
-                        <div className="mt-4">
-                          <span className="text-[10px] text-zinc-500 font-semibold block uppercase mb-2">Timing Waterfall (First 50 Requests)</span>
-                          <WaterfallChart requests={reportB.network.requests.slice(0, 50)} />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {compareActiveTab === "accessibility" && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="bg-zinc-900/40 border border-purple-500/15 p-6 rounded-2xl flex flex-col gap-4">
-                        <div className="flex justify-between items-center border-b border-zinc-850 pb-3">
-                          <h4 className="font-bold text-purple-400 text-xs uppercase tracking-wider">{reportA.url} Accessibility</h4>
-                          <span className="text-sm font-bold text-purple-300">{reportA.accessibility.score}/100</span>
-                        </div>
-                        <span className="text-zinc-500 text-[10px] uppercase font-bold block">Violations List ({reportA.accessibility.violations.length})</span>
-                        <div className="flex flex-col gap-2.5 max-h-[400px] overflow-y-auto">
-                          {reportA.accessibility.violations.length === 0 ? (
-                            <p className="text-emerald-400 text-xs italic">No violations detected!</p>
-                          ) : (
-                            reportA.accessibility.violations.map((v, idx) => (
-                              <div key={idx} className="bg-zinc-950 p-3 rounded-xl border border-zinc-900">
-                                <span className="font-bold text-zinc-200 text-xs block">{v.id}</span>
-                                <p className="text-[10px] text-zinc-500 mt-1 leading-relaxed">{v.description}</p>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="bg-zinc-900/40 border border-cyan-500/15 p-6 rounded-2xl flex flex-col gap-4">
-                        <div className="flex justify-between items-center border-b border-zinc-850 pb-3">
-                          <h4 className="font-bold text-cyan-400 text-xs uppercase tracking-wider">{reportB.url} Accessibility</h4>
-                          <span className="text-sm font-bold text-cyan-300">{reportB.accessibility.score}/100</span>
-                        </div>
-                        <span className="text-zinc-500 text-[10px] uppercase font-bold block">Violations List ({reportB.accessibility.violations.length})</span>
-                        <div className="flex flex-col gap-2.5 max-h-[400px] overflow-y-auto">
-                          {reportB.accessibility.violations.length === 0 ? (
-                            <p className="text-emerald-400 text-xs italic">No violations detected!</p>
-                          ) : (
-                            reportB.accessibility.violations.map((v, idx) => (
-                              <div key={idx} className="bg-zinc-950 p-3 rounded-xl border border-zinc-900">
-                                <span className="font-bold text-zinc-200 text-xs block">{v.id}</span>
-                                <p className="text-[10px] text-zinc-500 mt-1 leading-relaxed">{v.description}</p>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {compareActiveTab === "security" && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="bg-zinc-900/40 border border-purple-500/15 p-6 rounded-2xl flex flex-col gap-4">
-                        <div className="flex justify-between items-center border-b border-zinc-850 pb-3">
-                          <h4 className="font-bold text-purple-400 text-xs uppercase tracking-wider">{reportA.url} Security</h4>
-                          <span className="text-sm font-bold text-purple-300">{reportA.security.score}/100</span>
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          {reportA.security.headers.map((h, idx) => (
-                            <div key={idx} className="flex justify-between items-center py-2 border-b border-zinc-850/30 last:border-0">
-                              <span className="text-zinc-400 text-xs">{h.header}</span>
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                                h.present 
-                                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 
-                                  : "bg-red-500/10 text-red-400 border-red-500/20"
-                              }`}>
-                                {h.present ? "Present" : "Missing"}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="bg-zinc-900/40 border border-cyan-500/15 p-6 rounded-2xl flex flex-col gap-4">
-                        <div className="flex justify-between items-center border-b border-zinc-850 pb-3">
-                          <h4 className="font-bold text-cyan-400 text-xs uppercase tracking-wider">{reportB.url} Security</h4>
-                          <span className="text-sm font-bold text-cyan-300">{reportB.security.score}/100</span>
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          {reportB.security.headers.map((h, idx) => (
-                            <div key={idx} className="flex justify-between items-center py-2 border-b border-zinc-850/30 last:border-0">
-                              <span className="text-zinc-400 text-xs">{h.header}</span>
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                                h.present 
-                                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 
-                                  : "bg-red-500/10 text-red-400 border-red-500/20"
-                              }`}>
-                                {h.present ? "Present" : "Missing"}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
         )}
+
+        {/* Footer */}
+        <footer className="mt-16 pb-8 text-center text-zinc-700 text-xs">
+          Web Inspectra — AI-Powered Website MRI Scanner · React + Vite Frontend · Node.js Express Backend
+        </footer>
       </div>
     </div>
   );

@@ -1,0 +1,6 @@
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+  - unrs-resolver
+  - "@img/sharp-libvips-linux-x64"
+  - "@parcel/watcher"
