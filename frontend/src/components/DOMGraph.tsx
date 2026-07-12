@@ -102,11 +102,21 @@ export default function DOMGraph({ node }: Props) {
   const [selected, setSelected] = useState<LayoutNode | null>(null);
   const [pan, setPan] = useState({ x: 40, y: 30 });
   const [zoom, setZoom] = useState(1);
+  const [panning, setPanning] = useState(false); // Bug #10: useState so cursor re-renders
   const isPanning = useRef(false);
   const panStart = useRef({ mx: 0, my: 0, px: 0, py: 0 });
   const svgRef = useRef<SVGSVGElement>(null);
 
   const { nodes, edges } = layoutTree(node, 120, 5);
+
+  // Bug #4: Guard empty nodes array — Math.min/max on [] returns ±Infinity
+  if (nodes.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full text-slate-600 text-sm font-mono">
+        No DOM nodes to display
+      </div>
+    );
+  }
 
   // bounding box
   const minX = Math.min(...nodes.map((n) => n.x));
@@ -124,6 +134,7 @@ export default function DOMGraph({ node }: Props) {
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     if ((e.target as Element).closest(".dom-node")) return;
     isPanning.current = true;
+    setPanning(true);
     panStart.current = { mx: e.clientX, my: e.clientY, px: pan.x, py: pan.y };
   }, [pan]);
 
@@ -135,7 +146,7 @@ export default function DOMGraph({ node }: Props) {
     });
   }, []);
 
-  const onMouseUp = useCallback(() => { isPanning.current = false; }, []);
+  const onMouseUp = useCallback(() => { isPanning.current = false; setPanning(false); }, []);
 
   const onWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
@@ -196,7 +207,7 @@ export default function DOMGraph({ node }: Props) {
           style={{
             background: "rgba(255,255,255,0.015)",
             border: "1px solid rgba(255,255,255,0.07)",
-            cursor: isPanning.current ? "grabbing" : "grab",
+            cursor: panning ? "grabbing" : "grab",
             minHeight: 440,
           }}
           onMouseDown={onMouseDown}

@@ -118,6 +118,7 @@ function ImpactBadge({ impact }: { impact: "low" | "medium" | "high" }) {
 // ─── App ───────────────────────────────────────────────────────────────────
 export default function App() {
   const [urlInput, setUrlInput] = useState("");
+  const [urlError, setUrlError] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [stepIdx, setStepIdx] = useState(0);
   const [report, setReport] = useState<ScanReport | null>(null);
@@ -133,9 +134,27 @@ export default function App() {
     return () => clearInterval(id);
   }, [status]);
 
+  const validateUrl = (value: string): string => {
+    const v = value.trim();
+    if (!v) return "";
+    // Reject email addresses
+    if (v.includes("@")) return "That looks like an email address — please enter a website URL like example.com";
+    // Must resolve to something with a dot in the hostname
+    try {
+      const withProto = /^https?:\/\//i.test(v) ? v : `https://${v}`;
+      const parsed = new URL(withProto);
+      if (!parsed.hostname.includes(".")) return "Please enter a valid website URL like example.com";
+    } catch {
+      return "Invalid URL — try something like stripe.com or https://github.com";
+    }
+    return "";
+  };
+
   const scan = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!urlInput.trim()) return;
+    const validationErr = validateUrl(urlInput);
+    if (validationErr) { setUrlError(validationErr); return; }
     setStatus("loading"); setError(""); setReport(null);
     try {
       const res = await fetch("/api/scan", {
@@ -154,7 +173,7 @@ export default function App() {
     }
   };
 
-  const reset = () => { setStatus("idle"); setReport(null); setError(""); setTimeout(() => inputRef.current?.focus(), 80); };
+  const reset = () => { setStatus("idle"); setReport(null); setError(""); setUrlError(""); setTimeout(() => inputRef.current?.focus(), 80); };
 
   // ECG path for decoration
   const ecgPath = "M0,20 L15,20 L22,5 L32,35 L40,12 L50,28 L58,20 L80,20 L88,2 L98,38 L106,14 L114,25 L122,20 L150,20";
@@ -205,7 +224,10 @@ export default function App() {
               ref={inputRef}
               type="text"
               value={urlInput}
-              onChange={e => setUrlInput(e.target.value)}
+              onChange={e => {
+                setUrlInput(e.target.value);
+                if (urlError) setUrlError(validateUrl(e.target.value));
+              }}
               placeholder="Enter a website URL — stripe.com, github.com..."
               autoFocus
               className="w-full pl-11 pr-32 py-4 bg-transparent border-0 outline-none text-slate-200 placeholder-slate-600 text-sm font-mono input-glow"
@@ -220,6 +242,11 @@ export default function App() {
               Scan
             </button>
           </div>
+          {urlError && (
+            <p className="mt-2 text-xs font-mono text-red-400 flex items-center gap-1.5 pl-1">
+              <span>⚠</span> {urlError}
+            </p>
+          )}
         </form>
 
         {/* Feature tags */}
@@ -333,7 +360,7 @@ export default function App() {
             </div>
             <div className="min-w-0">
               <p className="text-sm font-mono font-semibold text-slate-200 truncate">{report.url}</p>
-              <p className="text-[10px] text-slate-600 font-mono">{new Date(report.scannedAt).toLocaleString()}</p>
+              <p className="text-[10px] text-slate-600 font-mono">{(() => { try { return new Date(report.scannedAt).toLocaleString(); } catch { return report.scannedAt; } })()}</p>
             </div>
           </div>
           <button onClick={reset}
@@ -526,11 +553,11 @@ export default function App() {
             </div>
 
             {/* AI performance notes */}
-            {(report.aiSummary?.findings?.filter(f => f.category === "performance").length ?? 0) > 0 && (
+            {(report.aiSummary?.findings?.filter(f => f.category.toLowerCase() === "performance").length ?? 0) > 0 && (
               <Card className="p-5">
                 <SectionHead>AI Performance Notes</SectionHead>
                 <div className="flex flex-col gap-4">
-                  {report.aiSummary?.findings?.filter(f => f.category === "performance").map((f, i) => (
+                  {report.aiSummary?.findings?.filter(f => f.category.toLowerCase() === "performance").map((f, i) => (
                     <div key={i} className="flex gap-3 items-start">
                       <ImpactBadge impact={f.impact} />
                       <div>
@@ -650,7 +677,7 @@ export default function App() {
               <Card className="p-5">
                 <ScoreGauge score={report.accessibility.score} label="Accessibility" subtitle={`${report.accessibility.violations.length} violations`} size={100} />
               </Card>
-              {report.aiSummary?.findings?.filter(f => f.category === "security").map((f, i) => (
+              {report.aiSummary?.findings?.filter(f => f.category.toLowerCase() === "security").map((f, i) => (
                 <Card key={i} className="p-4">
                   <div className="flex items-center gap-2 mb-2"><ImpactBadge impact={f.impact} /></div>
                   <p className="text-xs font-semibold text-slate-300 mb-1">{f.title}</p>

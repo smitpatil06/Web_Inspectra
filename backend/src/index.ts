@@ -25,8 +25,20 @@ const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
 function normalizeUrl(input: string): string {
   const cleaned = input.trim();
+
+  // Reject email addresses (contain '@' but are not a valid URL with a protocol)
+  if (cleaned.includes("@")) {
+    throw new Error("Input looks like an email address, not a website URL.");
+  }
+
   const withProto = /^https?:\/\//i.test(cleaned) ? cleaned : `https://${cleaned}`;
   const parsed = new URL(withProto);
+
+  // Must have a hostname with at least one dot (e.g. 'example.com'), ruling out bare words
+  if (!parsed.hostname.includes(".")) {
+    throw new Error("Please enter a valid website URL like example.com");
+  }
+
   return parsed.toString();
 }
 
@@ -389,7 +401,8 @@ Generate 5-8 findings total. Prioritize real issues found in the data above. Be 
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     const result = await model.generateContent(prompt);
     const text = result.response.text().trim();
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    // Bug #13: Non-greedy match to avoid spanning across multiple JSON objects in the response.
+    const jsonMatch = text.match(/\{[\s\S]*?\}(?=[^{]*$)/) || text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error("No JSON in response");
     return JSON.parse(jsonMatch[0]) as AISummary;
   } catch (err) {
@@ -475,7 +488,7 @@ app.post("/scan", async (req, res) => {
 
   let url: string;
   try { url = normalizeUrl(rawUrl); }
-  catch { res.status(400).json({ error: "Invalid URL format — please include a valid domain like example.com" }); return; }
+  catch (e: any) { res.status(400).json({ error: e.message || "Invalid URL format — please include a valid domain like example.com" }); return; }
 
   console.log(`\n[Backend] ─── Scanning: ${url} ───`);
 
@@ -569,6 +582,8 @@ app.post("/scan", async (req, res) => {
 
     // ── 4. Security headers ──────────────────────────────────────────────────
     console.log("[Backend] Auditing security headers...");
+    // Bug #11: Weighted security scoring — high-risk missing headers penalise more.
+    const RISK_WEIGHT: Record<string, number> = { high: 40, medium: 25, low: 20, none: 15 };
     const secHeaders: SecurityHeaderCheck[] = [
       { header: "Content-Security-Policy", present: !!responseHeaders["content-security-policy"], value: responseHeaders["content-security-policy"], description: "Prevents XSS attacks by restricting where resources load from.", risk: "high" },
       { header: "Strict-Transport-Security", present: !!responseHeaders["strict-transport-security"], value: responseHeaders["strict-transport-security"], description: "Forces HTTPS for all future requests — prevents downgrade attacks.", risk: "medium" },
@@ -577,7 +592,9 @@ app.post("/scan", async (req, res) => {
       { header: "Referrer-Policy", present: !!responseHeaders["referrer-policy"], value: responseHeaders["referrer-policy"], description: "Controls how much referrer information is sent with requests.", risk: "low" },
       { header: "Permissions-Policy", present: !!responseHeaders["permissions-policy"], value: responseHeaders["permissions-policy"], description: "Restricts browser feature access (camera, mic, geolocation).", risk: "none" },
     ];
-    const secScore = Math.round((secHeaders.filter(h => h.present).length / secHeaders.length) * 100);
+    const totalWeight = secHeaders.reduce((s, h) => s + (RISK_WEIGHT[h.risk] ?? 10), 0);
+    const earnedWeight = secHeaders.filter(h => h.present).reduce((s, h) => s + (RISK_WEIGHT[h.risk] ?? 10), 0);
+    const secScore = Math.round((earnedWeight / totalWeight) * 100);
     const security: SecurityData = { score: secScore, headers: secHeaders };
 
     // ── 5. Tech stack ────────────────────────────────────────────────────────
@@ -594,7 +611,8 @@ app.post("/scan", async (req, res) => {
     const domTree = bodyEl ? buildDOMTree($, bodyEl, 0, 5) : { tag: "body", children: [] };
     const nodeCount = $("*").length;
     let maxDepth = 0;
-    const calcDepth = (el: cheerio.AnyNode, d: number) => {
+    const calcDepth = (el: cheerio.AnyNode | undefined, d: number) => {
+      if (!el) return;
       if (d > maxDepth) maxDepth = d;
       $(el as cheerio.Element).children().each((_, c) => calcDepth(c, d + 1));
     };
@@ -604,15 +622,18 @@ app.post("/scan", async (req, res) => {
 
     // ── 8. Performance estimation ────────────────────────────────────────────
     console.log("[Backend] Estimating performance metrics...");
-    const totalTransferSize = networkRequests.reduce((s, r) => s + r.size, htmlSize);
+    // Bug #3: htmlSize is already included as networkRequests[0].size (the main document).
+    // Summing all requests already covers it — do NOT add htmlSize again.
+    const totalTransferSize = networkRequests.reduce((s, r) => s + r.size, 0);
     const totalLoadTime = Date.now() - t0;
 
     // Estimate Core Web Vitals from observable data
     const scriptCount = networkRequests.filter(r => r.resourceType === "script").length;
     const imageCount = networkRequests.filter(r => r.resourceType === "image").length;
     const cssCount = networkRequests.filter(r => r.resourceType === "stylesheet").length;
-    const avgResourceTime = networkRequests.length > 1
-      ? networkRequests.slice(1).reduce((s, r) => s + r.duration, 0) / (networkRequests.length - 1)
+    const subResources = networkRequests.slice(1);
+    const avgResourceTime = subResources.length > 0
+      ? subResources.reduce((s, r) => s + r.duration, 0) / subResources.length
       : 300;
 
     // FCP: First contentful paint — roughly TTFB + render-blocking resources

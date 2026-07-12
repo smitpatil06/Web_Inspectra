@@ -78,7 +78,8 @@ export default function DOMTreeViewer({ node, depth = 0, defaultExpanded = false
       {hasChildren && open && (
         <div>
           {node.children.map((child, i) => (
-            <DOMTreeViewer key={i} node={child} depth={depth + 1} />
+            <DOMTreeViewer key={`${child.tag}-${depth + 1}-${i}`} node={child} depth={depth + 1} />
+
           ))}
           <div
             className="font-mono text-[11px] py-0.5 px-1"

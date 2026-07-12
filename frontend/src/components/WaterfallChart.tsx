@@ -28,7 +28,9 @@ export default function WaterfallChart({ requests }: Props) {
   }
 
   const visible = requests.slice(0, 50);
-  const maxEnd = Math.max(...visible.map((r) => r.startTime + r.duration), 1);
+  // Bug #8: Math.max on empty array returns -Infinity; guard with || 1 so bar widths are valid
+  const maxEnd = Math.max(...visible.map((r) => r.startTime + r.duration), 0) || 1;
+
 
   const formatMs = (ms: number) =>
     ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms)}ms`;
