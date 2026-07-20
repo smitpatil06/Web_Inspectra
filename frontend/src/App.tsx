@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import type { ScanReport } from "@web-inspectra/shared-types";
+import type { ScanReport } from "./types";
 import DOMGraph from "./components/DOMGraph";
 import DOMTreeViewer from "./components/DOMTreeViewer";
 import WaterfallChart from "./components/WaterfallChart";
@@ -154,7 +154,8 @@ export default function App() {
     if (validationErr) { setUrlError(validationErr); return; }
     setStatus("loading"); setError(""); setReport(null);
     try {
-      const res = await fetch("/api/scan", {
+      const apiBase = import.meta.env.VITE_API_URL ?? "/api";
+      const res = await fetch(`${apiBase}/scan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: urlInput.trim() }),

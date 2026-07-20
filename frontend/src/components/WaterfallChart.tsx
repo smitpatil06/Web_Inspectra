@@ -1,4 +1,4 @@
-import type { NetworkRequest } from "@web-inspectra/shared-types";
+import type { NetworkRequest } from "../types";
 
 interface Props { requests: NetworkRequest[] }
 

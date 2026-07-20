@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import type { DOMNode } from "@web-inspectra/shared-types";
+import type { DOMNode } from "../types";
 
 // ── Color map by tag category ───────────────────────────────────────────────
 const TAG_COLOR: Record<string, string> = {

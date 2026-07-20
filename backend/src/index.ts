@@ -3,12 +3,13 @@ import cors from "cors";
 import dotenv from "dotenv";
 import axios from "axios";
 import * as cheerio from "cheerio";
+import type { Element, AnyNode } from "domhandler";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import type {
   ScanReport, DOMNode, DOMData, NetworkRequest, NetworkData,
   AccessibilityData, A11yIssue, TechStackData, SecurityData,
   SecurityHeaderCheck, AISummary, AIFinding,
-} from "@web-inspectra/shared-types";
+} from "./types.js";
 
 dotenv.config();
 
@@ -90,29 +91,29 @@ function extractResourceUrls(html: string, baseUrl: string): { url: string; type
 }
 
 // Build a simple DOMNode tree from cheerio
-function buildDOMTree($: cheerio.CheerioAPI, el: cheerio.AnyNode, depth: number, maxDepth = 6): DOMNode {
-  const elem = el as cheerio.Element;
-  const tagName = (elem.tagName || elem.name || "unknown").toLowerCase();
-  const attribs = elem.attribs || {};
+function buildDOMTree($: cheerio.CheerioAPI, el: Element, depth: number, maxDepth = 6): DOMNode {
+  const tagName = (el.tagName || (el as any).name || "unknown").toLowerCase();
+  const attribs = el.attribs || {};
 
   const classes = (attribs.class || "").split(/\s+/).filter(Boolean);
   const id = attribs.id;
   const attributes: Record<string, string> = {};
   for (const [k, v] of Object.entries(attribs)) {
     if (k !== "class" && k !== "id" && v) {
-      attributes[k] = v.length > 80 ? v.substring(0, 80) + "…" : v;
+      const sv = String(v);
+      attributes[k] = sv.length > 80 ? sv.substring(0, 80) + "…" : sv;
     }
   }
 
   let textContent = "";
   if (depth <= 2) {
-    const directText = $(elem).contents().filter((_, n) => n.type === "text").text().trim().substring(0, 60);
+    const directText = $(el).contents().filter((_, n) => n.type === "text").text().trim().substring(0, 60);
     if (directText) textContent = directText;
   }
 
   const children: DOMNode[] = [];
   if (depth < maxDepth) {
-    $(elem).children().each((_, child) => {
+    $(el).children().each((_, child) => {
       if (child.type === "tag") {
         children.push(buildDOMTree($, child, depth + 1, maxDepth));
       }
@@ -559,7 +560,7 @@ app.post("/scan", async (req, res) => {
               maxRedirects: 5,
             });
             const duration = Date.now() - rt0;
-            const size = parseInt(r.headers["content-length"] || "0", 10) || 0;
+            const size = parseInt(String(r.headers["content-length"] ?? "0"), 10) || 0;
             return { url: rUrl, type, status: r.status, duration, size, failed: r.status >= 400 };
           } catch {
             return { url: rUrl, type, status: 0, duration: Date.now() - rt0, size: 0, failed: true };
@@ -611,10 +612,10 @@ app.post("/scan", async (req, res) => {
     const domTree = bodyEl ? buildDOMTree($, bodyEl, 0, 5) : { tag: "body", children: [] };
     const nodeCount = $("*").length;
     let maxDepth = 0;
-    const calcDepth = (el: cheerio.AnyNode | undefined, d: number) => {
+    const calcDepth = (el: Element | undefined, d: number) => {
       if (!el) return;
       if (d > maxDepth) maxDepth = d;
-      $(el as cheerio.Element).children().each((_, c) => calcDepth(c, d + 1));
+      $(el).children().each((_, c) => calcDepth(c as Element, d + 1));
     };
     calcDepth($("html").get(0), 0);
     const largestSubtrees = getLargestSubtrees(domTree);

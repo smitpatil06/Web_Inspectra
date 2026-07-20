@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { DOMNode } from "@web-inspectra/shared-types";
+import type { DOMNode } from "../types";
 import { ChevronRight, ChevronDown } from "lucide-react";
 
 interface Props { node: DOMNode; depth?: number; defaultExpanded?: boolean; }
