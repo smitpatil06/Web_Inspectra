@@ -696,9 +696,14 @@ app.post("/scan", async (req, res) => {
   }
 });
 
+app.get("/", (_, res) => res.json({ status: "ok", message: "Web Inspectra API is running" }));
 app.get("/health", (_, res) => res.json({ status: "ok", aiEnabled: !!genAI }));
 
-app.listen(PORT, () => {
-  console.log(`\n🩺 Web Inspectra Backend running on http://localhost:${PORT}`);
-  console.log(`   AI Analysis: ${genAI ? "✓ Gemini enabled" : "⚠ Mock mode (add GEMINI_API_KEY to backend/.env)"}`);
-});
+if (process.env.NODE_ENV !== "production") {
+  app.listen(PORT, () => {
+    console.log(`\n🩺 Web Inspectra Backend running on http://localhost:${PORT}`);
+    console.log(`   AI Analysis: ${genAI ? "✓ Gemini enabled" : "⚠ Mock mode (add GEMINI_API_KEY to backend/.env)"}`);
+  });
+}
+
+export default app;
