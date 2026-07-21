@@ -154,8 +154,13 @@ export default function App() {
     if (validationErr) { setUrlError(validationErr); return; }
     setStatus("loading"); setError(""); setReport(null);
     try {
+<<<<<<< HEAD
       const apiBase = import.meta.env.VITE_API_URL ?? "/api";
       const res = await fetch(`${apiBase}/scan`, {
+=======
+      const BASE = import.meta.env.VITE_API_URL ?? "";
+      const res = await fetch(`${BASE}/scan`, {
+>>>>>>> 479f782 (done separate)
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: urlInput.trim() }),

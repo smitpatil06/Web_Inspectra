@@ -16,7 +16,12 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors());
+app.use(cors({
+  origin: process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
+    : true, // allow all in dev (no env var set)
+}));
+
 app.use(express.json());
 
 const apiKey = process.env.GEMINI_API_KEY || "";
