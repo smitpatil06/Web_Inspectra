@@ -709,6 +709,13 @@ if (process.env.NODE_ENV !== "production") {
     console.log(`\n🩺 Web Inspectra Backend running on http://localhost:${PORT}`);
     console.log(`   AI Analysis: ${genAI ? "✓ Gemini enabled" : "⚠ Mock mode (add GEMINI_API_KEY to backend/.env)"}`);
   });
+} else {
+  // Render.com: always start the HTTP server in production
+  app.listen(PORT, () => {
+    console.log(`\n🩺 Web Inspectra Backend running on port ${PORT}`);
+    console.log(`   AI Analysis: ${genAI ? "✓ Gemini enabled" : "⚠ No GEMINI_API_KEY set"}`);
+  });
 }
 
 export default app;
+
