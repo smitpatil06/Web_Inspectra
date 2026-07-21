@@ -154,13 +154,10 @@ export default function App() {
     if (validationErr) { setUrlError(validationErr); return; }
     setStatus("loading"); setError(""); setReport(null);
     try {
-<<<<<<< HEAD
+      // In dev: VITE_API_URL is unset → falls back to /api → Vite proxy → localhost:3001
+      // In prod: VITE_API_URL = https://your-render-url → direct call to Render backend
       const apiBase = import.meta.env.VITE_API_URL ?? "/api";
       const res = await fetch(`${apiBase}/scan`, {
-=======
-      const BASE = import.meta.env.VITE_API_URL ?? "";
-      const res = await fetch(`${BASE}/scan`, {
->>>>>>> 479f782 (done separate)
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: urlInput.trim() }),
